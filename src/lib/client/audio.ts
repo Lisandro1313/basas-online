@@ -260,11 +260,17 @@ export function sndBid() {
   });
 }
 
-/** Te toca: golpecito de nudillo sobre la mesa, discreto. */
+/**
+ * Te toca: doble golpe de nudillo sobre la mesa, como cuando alguien te avisa
+ * en la mesa de verdad. Va más fuerte que el resto porque es el aviso que no
+ * te podés perder.
+ */
 export function sndYourTurn() {
   emit('turn', () => {
-    noise({ duration: 0.11, from: 900, to: 260, type: 'lowpass', q: 3, gain: 0.4 });
-    noise({ when: 0.005, duration: 0.04, from: 2400, to: 1400, q: 3, gain: 0.14 });
+    for (const when of [0, 0.13]) {
+      noise({ when, duration: 0.12, from: 950, to: 250, type: 'lowpass', q: 3, gain: 0.55 });
+      noise({ when: when + 0.005, duration: 0.045, from: 2600, to: 1400, q: 3, gain: 0.2 });
+    }
   });
 }
 

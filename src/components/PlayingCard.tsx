@@ -14,10 +14,12 @@ interface Props {
   size?: keyof typeof SIZES;
   disabled?: boolean;
   selected?: boolean;
+  /** Resalta la carta como jugable ahora mismo. */
+  glow?: boolean;
   onClick?: () => void;
 }
 
-export function PlayingCard({ card, size = 'md', disabled, selected, onClick }: Props) {
+export function PlayingCard({ card, size = 'md', disabled, selected, glow, onClick }: Props) {
   const red = card.suit === 'hearts' || card.suit === 'diamonds';
   const interactive = Boolean(onClick) && !disabled;
 
@@ -35,6 +37,7 @@ export function PlayingCard({ card, size = 'md', disabled, selected, onClick }: 
         interactive
           ? 'cursor-pointer hover:-translate-y-2 hover:shadow-xl'
           : 'cursor-default',
+        glow ? 'card-glow' : '',
         disabled && onClick ? 'opacity-40 saturate-50' : '',
       ].join(' ')}
     >
@@ -52,7 +55,7 @@ export function PlayingCard({ card, size = 'md', disabled, selected, onClick }: 
 export function CardBack({ size = 'sm' }: { size?: keyof typeof SIZES }) {
   return (
     <div
-      className={`${SIZES[size]} rounded-lg border border-slate-700 bg-gradient-to-br from-indigo-800 to-indigo-950 shadow-md`}
+      className={`${SIZES[size]} rounded-lg border border-slate-700 bg-linear-to-br from-indigo-800 to-indigo-950 shadow-md`}
     />
   );
 }

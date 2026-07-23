@@ -94,30 +94,64 @@ export function GameTable({ state, youId, busy, act }: Props) {
     }
   }, [state.round]);
 
+  /* --- Aviso de turno: sonido, destello y vibración ----------------------- */
+  const [flash, setFlash] = useState(false);
   const wasMyTurn = useRef(false);
   useEffect(() => {
     const mine = Boolean(you?.isYourTurn);
-    if (mine && !wasMyTurn.current) sndYourTurn();
+    if (mine && !wasMyTurn.current) {
+      sndYourTurn();
+      setFlash(true);
+      // En el celular la vibración es lo que más se nota si mirás para otro lado.
+      navigator.vibrate?.(180);
+      const id = setTimeout(() => setFlash(false), 1500);
+      wasMyTurn.current = mine;
+      return () => clearTimeout(id);
+    }
     wasMyTurn.current = mine;
   }, [you?.isYourTurn]);
 
   const lastTickSecond = useRef(99);
   useEffect(() => {
     const secs = Math.ceil(remaining / 1000);
-    if (you?.isYourTurn && secs <= 5 && secs > 0 && secs !== lastTickSecond.current) sndTick();
+    if (you?.isYourTurn && secs <= 5 && secs > 0 && secs !== lastTickSecond.current) {
+      sndTick();
+      if (secs <= 3) navigator.vibrate?.(70);
+    }
     lastTickSecond.current = secs;
   }, [remaining, you?.isYourTurn]);
 
   /* --- Qué se ve en la mesa ---------------------------------------------- */
   const onTable = reveal ? reveal.cards : state.trick;
   const seconds = Math.ceil(remaining / 1000);
-  const urgent = seconds <= 5;
+  const myTurn = Boolean(you?.isYourTurn);
+  // Los avisos rojos son solo para vos: que a otro se le acabe el tiempo no
+  // tiene por qué ponerte nervioso.
+  const urgent = myTurn && seconds <= 10 && seconds > 0;
+  const critical = myTurn && seconds <= 5 && seconds > 0;
   const pct = state.turnDeadline
     ? Math.max(0, Math.min(100, (remaining / (state.turnSeconds * 1000)) * 100))
     : 0;
 
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 p-3 pb-6" onPointerDown={unlockAudio}>
+      {/* Destello dorado al empezar tu turno */}
+      {flash && (
+        <div
+          aria-hidden
+          className="turn-flash pointer-events-none fixed inset-0 z-50"
+          style={{ boxShadow: 'inset 0 0 90px 14px rgba(250, 204, 21, 0.75)' }}
+        />
+      )}
+
+      {/* Latido rojo cuando se te acaba el tiempo */}
+      {urgent && (
+        <div
+          aria-hidden
+          className="urgent-vignette pointer-events-none fixed inset-0 z-40"
+          style={{ boxShadow: 'inset 0 0 100px 18px rgba(244, 63, 94, 0.85)' }}
+        />
+      )}
       {/* Cabecera: ronda y triunfo */}
       <div className="flex items-center justify-between gap-2 rounded-xl border border-white/15 bg-black/30 px-4 py-2 text-sm">
         <span>
@@ -141,16 +175,30 @@ export function GameTable({ state, youId, busy, act }: Props) {
       {/* Reloj del turno */}
       {state.turnDeadline && (
         <div className="space-y-1">
-          <div className="flex justify-between text-xs">
-            <span className={urgent ? 'font-bold text-rose-300' : 'text-white/60'}>
-              {you?.isYourTurn ? 'Tu turno' : `Turno de ${turnPlayer?.name}`}
+          <div className="flex items-center justify-between text-xs">
+            <span
+              className={
+                myTurn ? 'font-bold text-amber-300' : 'text-white/60'
+              }
+            >
+              {myTurn ? '¡Te toca a vos!' : `Turno de ${turnPlayer?.name}`}
             </span>
-            <span className={urgent ? 'font-bold text-rose-300' : 'text-white/60'}>{seconds}s</span>
+            <span
+              className={`tabular-nums ${
+                critical
+                  ? 'beat-fast text-base font-black text-rose-300'
+                  : urgent
+                    ? 'beat font-bold text-rose-300'
+                    : 'text-white/60'
+              }`}
+            >
+              {seconds}s
+            </span>
           </div>
-          <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+          <div className="h-2 overflow-hidden rounded-full bg-white/10">
             <div
               className={`h-full rounded-full transition-[width] duration-150 ease-linear ${
-                urgent ? 'bg-rose-400' : 'bg-amber-400'
+                urgent ? 'bg-rose-400' : myTurn ? 'bg-amber-400' : 'bg-white/40'
               }`}
               style={{ width: `${pct}%` }}
             />
@@ -202,7 +250,13 @@ export function GameTable({ state, youId, busy, act }: Props) {
         <div className="rounded-2xl border border-white/15 bg-black/30 p-4">
           {you.isYourTurn ? (
             <>
-              <p className="mb-3 text-center font-semibold">¿Cuántas bazas vas a ganar?</p>
+              <p
+                className={`mb-3 text-center font-semibold ${
+                  critical ? 'beat-fast text-rose-300' : ''
+                }`}
+              >
+                {critical ? `¡Apostá, ${seconds}s!` : '¿Cuántas bazas vas a ganar?'}
+              </p>
               <div className="flex flex-wrap justify-center gap-2">
                 {Array.from({ length: state.cardsThisRound + 1 }, (_, n) => {
                   const blocked = you.forbiddenBid === n;
@@ -246,7 +300,15 @@ export function GameTable({ state, youId, busy, act }: Props) {
           <p className="text-center text-sm text-white/60">
             {state.phase === 'playing' &&
               (you.isYourTurn ? (
-                <span className="font-bold text-amber-300">¡Te toca jugar!</span>
+                <span
+                  className={`inline-block rounded-full px-3 py-1 font-bold ${
+                    critical
+                      ? 'beat-fast bg-rose-400/25 text-rose-200'
+                      : 'beat bg-amber-400/20 text-amber-300'
+                  }`}
+                >
+                  {critical ? `¡Rápido, ${seconds}s!` : '¡Te toca jugar!'}
+                </span>
               ) : (
                 <>Juega {turnPlayer?.name}…</>
               ))}
@@ -261,6 +323,7 @@ export function GameTable({ state, youId, busy, act }: Props) {
                   card={card}
                   size="lg"
                   disabled={!playable}
+                  glow={playable}
                   onClick={playable ? () => void act({ type: 'play', cardId: card.id }) : undefined}
                 />
               );

@@ -1,0 +1,28 @@
+rules_version = '2';
+
+// Basas Online — reglas de seguridad.
+// Pegá esto en Firebase Console > Firestore Database > Rules > Publicar.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // El estado completo de las partidas: manos de todos y tokens.
+    // Nadie lo lee ni lo escribe desde el navegador. El backend usa el Admin
+    // SDK, que ignora estas reglas, así que sigue teniendo acceso total.
+    match /rooms/{code} {
+      allow read, write: if false;
+    }
+
+    // Solo un número de versión por sala. No hay nada sensible acá: es la señal
+    // de "algo cambió" que escuchan los clientes para pedir su vista redactada.
+    match /pulse/{code} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Cualquier otra colección, cerrada.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

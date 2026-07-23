@@ -1,0 +1,22 @@
+node_modules
+.next
+out
+build
+.DS_Store
+*.pem
+npm-debug.log*
+next-env.d.ts
+tsconfig.tsbuildinfo
+
+# Vercel
+.vercel
+
+# Variables de entorno. .env.example sí se versiona: documenta qué hace falta.
+.env
+.env*.local
+.env*
+!.env.example
+
+# Claves de servicio de Firebase. NUNCA subir esto a git.
+*firebase-adminsdk*.json
+serviceAccountKey.json

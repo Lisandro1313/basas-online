@@ -3,6 +3,7 @@
 import { Avatar } from './Avatar';
 import { AnimatedEmote } from './AnimatedEmote';
 import { PlayingCard } from './PlayingCard';
+import { SUIT_NAME } from '@/lib/game/cards';
 import type { ActiveReaction } from '@/lib/client/useReactions';
 import type { PublicState } from '@/lib/game/redact';
 import type { PlayedCard } from '@/lib/game/types';
@@ -16,15 +17,15 @@ interface Props {
 }
 
 /**
- * Mesa ovalada con los jugadores alrededor, al estilo de una sala de póker.
+ * Mesa ovalada estilo sala de póker.
  *
- * Vos siempre quedás abajo al centro y el resto se reparte en sentido horario
- * desde tu lugar.
+ * Vos siempre quedás abajo al centro y el resto en sentido horario desde tu
+ * lugar. Todo se mide en unidades de container query (cqmin/cqw) sobre la mesa,
+ * así escala parejo en teléfono y en pantalla grande.
  *
- * Clave para que se adapte bien: la mesa es un contenedor de tamaño consultable
- * (`container-type: size`) y TODO adentro se mide en `cqmin` (una fracción del
- * lado menor de la mesa). Así el conjunto escala parejo desde un teléfono
- * angosto hasta una pantalla grande, sin píxeles fijos que se desarmen.
+ * En el paño: a la izquierda la carta de triunfo (fija toda la ronda), y al
+ * lado, en fila, las cartas que se van jugando en la baza. Junto a cada jugador
+ * se apila boca abajo un "masito" por cada baza que ganó en la ronda.
  */
 export function RoundTable({ state, youId, onTable, reveal, reactions }: Props) {
   const total = state.players.length;
@@ -35,19 +36,18 @@ export function RoundTable({ state, youId, onTable, reveal, reactions }: Props) 
     const a = angleOf(seat);
     return { left: `${50 + rx * Math.cos(a)}%`, top: `${50 + ry * Math.sin(a)}%` };
   };
-  const seatOf = (playerId: string) =>
-    (state.players.findIndex((p) => p.id === playerId) - youIndex + total) % total;
 
-  const winnerName = reveal
-    ? state.players.find((p) => p.id === reveal.winnerId)?.name
-    : null;
+  const nameOf = (id: string) => state.players.find((p) => p.id === id)?.name ?? '';
+  const winnerName = reveal ? nameOf(reveal.winnerId) : null;
 
-  // Tamaños relativos a la mesa. cqmin = 1% del lado menor del contenedor.
+  // Tamaños relativos a la mesa.
   const avatar = 'clamp(28px, 12cqmin, 60px)';
-  const cardW = 'clamp(30px, 11cqmin, 60px)';
+  const cardW = 'clamp(26px, 9.5cqmin, 52px)';
+  const trumpW = 'clamp(30px, 11cqmin, 58px)';
   const plaqueW = 'clamp(52px, 22cqmin, 104px)';
   const nameSize = 'clamp(9px, 3cqmin, 13px)';
   const dataSize = 'clamp(9px, 2.8cqmin, 12px)';
+  const tinySize = 'clamp(8px, 2.4cqmin, 11px)';
 
   return (
     <div
@@ -59,34 +59,60 @@ export function RoundTable({ state, youId, onTable, reveal, reactions }: Props) 
         <div className="table-felt absolute inset-[3.5%] rounded-[50%]" />
       </div>
 
-      {/* Centro */}
-      <div className="pointer-events-none absolute top-[36%] left-1/2 z-20 -translate-x-1/2 -translate-y-1/2 text-center">
-        {winnerName && onTable.length > 0 ? (
-          <span
-            className="rounded-full bg-black/70 px-2.5 py-1 font-bold text-emerald-300 shadow-lg"
-            style={{ fontSize: nameSize }}
-          >
-            {winnerName} se la llevó
+      {/* Triunfo, fijo a la izquierda del paño */}
+      {state.trumpCard && (
+        <div
+          className="absolute top-1/2 left-[19%] z-10 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-1"
+          style={{ containerType: 'inline-size', width: trumpW }}
+        >
+          <span className="font-semibold text-white/70" style={{ fontSize: tinySize }}>
+            Triunfo
+          </span>
+          <div className="w-full -rotate-6 drop-shadow-lg">
+            <PlayingCard card={state.trumpCard} fluid />
+          </div>
+          <span className="text-center leading-tight text-white/60" style={{ fontSize: tinySize }}>
+            {SUIT_NAME[state.trumpCard.suit]}
+          </span>
+        </div>
+      )}
+
+      {/* Cartas jugadas en fila, al lado del triunfo */}
+      <div
+        className="absolute top-1/2 left-[58%] z-10 flex -translate-x-1/2 -translate-y-1/2 items-end justify-center"
+        style={{ gap: '2%', width: '58%' }}
+      >
+        {onTable.length === 0 ? (
+          <span className="text-white/30" style={{ fontSize: tinySize }}>
+            {state.phase === 'bidding' ? 'Apostando…' : 'Esperando…'}
           </span>
         ) : (
-          onTable.length === 0 && (
-            <span className="text-white/30" style={{ fontSize: nameSize }}>
-              {state.phase === 'bidding' ? 'Apostando…' : 'Esperando…'}
-            </span>
-          )
+          onTable.map((played) => (
+            <div
+              key={played.card.id}
+              className="flex flex-col items-center gap-0.5"
+              style={{ containerType: 'inline-size', width: cardW }}
+            >
+              <div className="w-full drop-shadow-lg">
+                <PlayingCard card={played.card} fluid />
+              </div>
+              <span className="max-w-full truncate text-white/70" style={{ fontSize: tinySize }}>
+                {nameOf(played.playerId)}
+              </span>
+            </div>
+          ))
         )}
       </div>
 
-      {/* Cartas de la baza */}
-      {onTable.map((played) => (
+      {/* Aviso de quién se llevó la baza */}
+      {winnerName && onTable.length > 0 && (
         <div
-          key={played.card.id}
-          className="absolute z-10 -translate-x-1/2 -translate-y-1/2 drop-shadow-lg"
-          style={{ ...at(seatOf(played.playerId), 20, 18), width: cardW, containerType: 'inline-size' }}
+          className="pointer-events-none absolute top-[74%] left-1/2 z-20 -translate-x-1/2 rounded-full bg-black/70 px-2.5 py-1 font-bold text-emerald-300 shadow-lg"
+          style={{ fontSize: nameSize }}
         >
-          <PlayingCard card={played.card} fluid />
+          {winnerName} se la llevó
         </div>
-      ))}
+      )}
 
       {/* Botón del repartidor */}
       {state.phase !== 'lobby' && (
@@ -167,9 +193,38 @@ export function RoundTable({ state, youId, onTable, reveal, reactions }: Props) 
                 {player.points} pts
               </p>
             </div>
+
+            {/* Masito: una carta boca abajo por cada baza ganada */}
+            {player.tricks > 0 && (
+              <TrickPile count={player.tricks} />
+            )}
           </div>
         );
       })}
+    </div>
+  );
+}
+
+/** Pila de cartas boca abajo, símbolo de las bazas ganadas en la ronda. */
+function TrickPile({ count }: { count: number }) {
+  const w = 'clamp(9px, 3.4cqmin, 16px)';
+  const step = 'clamp(3px, 1.1cqmin, 5px)';
+  return (
+    <div
+      className="mt-1 flex items-center"
+      title={`${count} baza${count === 1 ? '' : 's'} ganada${count === 1 ? '' : 's'}`}
+    >
+      {Array.from({ length: count }, (_, i) => (
+        <div
+          key={i}
+          className="rounded-xs border border-indigo-950 bg-linear-to-br from-indigo-700 to-indigo-950 shadow-sm"
+          style={{
+            width: w,
+            aspectRatio: '5 / 7',
+            marginLeft: i === 0 ? 0 : `calc(-1 * (${w} - ${step}))`,
+          }}
+        />
+      ))}
     </div>
   );
 }

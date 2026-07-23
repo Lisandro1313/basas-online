@@ -56,6 +56,13 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
     return () => clearTimeout(id);
   }, [holdTable]);
 
+  // El único error que queda es el corte de conexión: se va solo a los 3,5s.
+  useEffect(() => {
+    if (!room.error) return;
+    const id = setTimeout(() => room.dismissError(), 3500);
+    return () => clearTimeout(id);
+  }, [room.error, room]);
+
   // Si el servidor ya no reconoce nuestra identidad, volvemos a pedir el nombre.
   const knownPlayer = Boolean(
     session && state?.players.some((p) => p.id === session.playerId)

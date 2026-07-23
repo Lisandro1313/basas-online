@@ -71,14 +71,14 @@ export function useRoom(code: string, session: Session | null): RoomHook {
         });
         const data = await res.json();
         if (!res.ok) {
-          if (!opts.silent) {
-            setError(data.error ?? 'No se pudo hacer esa jugada.');
-            await refresh();
-          }
+          // Rechazo de regla (no es tu turno, carta inválida, etc.): no molestamos
+          // con un cartel rojo. La UI ya evita casi todo; acá solo resincronizamos.
+          await refresh();
           return;
         }
         setState(data.state);
       } catch {
+        // Solo los cortes de conexión ameritan aviso, y se va solo (ver page).
         if (!opts.silent) setError('Se cortó la conexión con el servidor.');
       } finally {
         if (!opts.silent) setBusy(false);

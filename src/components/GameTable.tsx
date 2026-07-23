@@ -6,7 +6,6 @@ import { PauseOverlay } from './PauseOverlay';
 import { RoundTable } from './RoundTable';
 import { StickerBar } from './StickerBar';
 import { useReactions } from '@/lib/client/useReactions';
-import { SUIT_NAME, valueLabel } from '@/lib/game/cards';
 import {
   sndBid,
   sndDeal,
@@ -182,34 +181,21 @@ export function GameTable({ state, youId, busy, act }: Props) {
           style={{ boxShadow: 'inset 0 0 100px 18px rgba(244, 63, 94, 0.85)' }}
         />
       )}
-      {/* Cabecera: ronda y triunfo */}
+      {/* Cabecera: ronda (el triunfo ahora vive en la mesa) */}
       <div className="flex items-center justify-between gap-2 rounded-xl border border-white/10 bg-slate-950/70 px-4 py-2 text-sm">
         <span>
           Ronda <b>{state.round}</b>/{state.totalRounds} · {state.cardsThisRound} cartas
         </span>
-        <span className="flex items-center gap-2">
-          {state.hostId === youId && (
-            <button
-              onClick={() => void act({ type: 'pause' })}
-              disabled={busy}
-              title="Pausar el juego"
-              className="rounded-lg bg-white/15 px-2 py-1 text-xs font-semibold hover:bg-white/25 disabled:opacity-40"
-            >
-              ⏸ Pausa
-            </button>
-          )}
-          <span className="text-white/60">Triunfo:</span>
-          {state.trumpCard ? (
-            <>
-              <PlayingCard card={state.trumpCard} size="sm" />
-              <b className="text-white/80">
-                {valueLabel(state.trumpCard.value)} de {SUIT_NAME[state.trumpCard.suit]}
-              </b>
-            </>
-          ) : (
-            <b className="text-white/60">ninguno</b>
-          )}
-        </span>
+        {state.hostId === youId && (
+          <button
+            onClick={() => void act({ type: 'pause' })}
+            disabled={busy}
+            title="Pausar el juego"
+            className="rounded-lg bg-white/15 px-2 py-1 text-xs font-semibold hover:bg-white/25 disabled:opacity-40"
+          >
+            ⏸ Pausa
+          </button>
+        )}
       </div>
 
       {state.pausedAt !== null && (

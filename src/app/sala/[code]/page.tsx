@@ -2,6 +2,7 @@
 
 import { use, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { AudioControls } from '@/components/AudioControls';
 import { GameOver } from '@/components/GameOver';
 import { GameTable } from '@/components/GameTable';
 import { Lobby } from '@/components/Lobby';
@@ -61,6 +62,7 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
         </Link>
         <span className="flex items-center gap-3">
           <span className="font-mono tracking-widest text-white/70">{code}</span>
+          <AudioControls />
           <span className="flex items-center gap-1">
             <span
               className={`h-2 w-2 rounded-full ${room.live ? 'bg-emerald-400' : 'bg-amber-400'}`}

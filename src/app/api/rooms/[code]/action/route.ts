@@ -2,10 +2,12 @@ import { NextResponse } from 'next/server';
 import {
   RuleError,
   addBot,
+  applyTimeout,
   nextRound,
   placeBid,
   playAgain,
   playCard,
+  refreshDeadline,
   removePlayer,
   runBots,
   startGame,
@@ -68,6 +70,11 @@ export async function POST(
           playAgain(draft);
           break;
 
+        case 'timeout':
+          // Cualquiera puede avisar que venció el turno; el servidor lo verifica.
+          applyTimeout(draft);
+          break;
+
         case 'leave':
           removePlayer(draft, playerId);
           break;
@@ -78,6 +85,7 @@ export async function POST(
 
       // Los bots resuelven sus turnos acá mismo, antes de publicar el estado.
       runBots(draft);
+      refreshDeadline(draft);
     });
 
     return NextResponse.json({ state: redact(state, playerId) });

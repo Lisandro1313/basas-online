@@ -11,7 +11,7 @@ export interface RoomHook {
   error: string | null;
   live: boolean;
   busy: boolean;
-  act: (payload: Record<string, unknown>) => Promise<void>;
+  act: (payload: Record<string, unknown>, opts?: { silent?: boolean }) => Promise<void>;
   refresh: () => Promise<void>;
   dismissError: () => void;
 }
@@ -53,10 +53,12 @@ export function useRoom(code: string, session: Session | null): RoomHook {
   }, [code]);
 
   const act = useCallback(
-    async (payload: Record<string, unknown>) => {
+    async (payload: Record<string, unknown>, opts: { silent?: boolean } = {}) => {
       const current = sessionRef.current;
       if (!current) return;
-      setBusy(true);
+      // Las acciones silenciosas (avisos de turno vencido) no deben molestar:
+      // es normal que otro jugador haya avisado primero y esta llegue tarde.
+      if (!opts.silent) setBusy(true);
       try {
         const res = await fetch(`/api/rooms/${code}/action`, {
           method: 'POST',
@@ -69,15 +71,17 @@ export function useRoom(code: string, session: Session | null): RoomHook {
         });
         const data = await res.json();
         if (!res.ok) {
-          setError(data.error ?? 'No se pudo hacer esa jugada.');
-          await refresh();
+          if (!opts.silent) {
+            setError(data.error ?? 'No se pudo hacer esa jugada.');
+            await refresh();
+          }
           return;
         }
         setState(data.state);
       } catch {
-        setError('Se cortó la conexión con el servidor.');
+        if (!opts.silent) setError('Se cortó la conexión con el servidor.');
       } finally {
-        setBusy(false);
+        if (!opts.silent) setBusy(false);
       }
     },
     [code, refresh]

@@ -55,8 +55,15 @@ export interface RoomState {
   trumpSuit: Suit | null;
   trick: PlayedCard[];
   leadSuit: Suit | null;
-  /** Última baza completa, para poder mostrarla un instante antes de limpiar. */
-  lastTrick: { cards: PlayedCard[]; winnerId: string } | null;
+  /**
+   * Última baza completa. `seq` sube con cada baza: es lo que le permite al
+   * cliente darse cuenta de que hay una nueva para mostrar antes de recogerla.
+   */
+  lastTrick: { cards: PlayedCard[]; winnerId: string; seq: number } | null;
+  /** Bazas resueltas en toda la partida, para numerar `lastTrick`. */
+  trickSeq: number;
+  /** Momento (epoch ms) en que vence el turno actual. null si no hay turno. */
+  turnDeadline: number | null;
   history: RoundHistory[];
   winnerId: string | null;
   log: string[];

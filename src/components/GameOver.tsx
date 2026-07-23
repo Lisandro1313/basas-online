@@ -1,6 +1,8 @@
 'use client';
 
+import { useEffect } from 'react';
 import Link from 'next/link';
+import { sndFanfare } from '@/lib/client/audio';
 import type { PublicState } from '@/lib/game/redact';
 
 interface Props {
@@ -15,6 +17,10 @@ export function GameOver({ state, youId, busy, act }: Props) {
   const champion = ranking[0];
   const youWon = champion?.id === youId;
   const isHost = state.hostId === youId;
+
+  useEffect(() => {
+    sndFanfare();
+  }, []);
 
   return (
     <div className="mx-auto w-full max-w-lg space-y-5 p-4">

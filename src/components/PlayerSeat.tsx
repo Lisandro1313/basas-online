@@ -39,7 +39,8 @@ export function PlayerSeat({ player, isTurn, isDealer, isYou, phase }: Props) {
       </div>
 
       <span className="text-[11px] text-white/60">
-        {player.isBot ? 'bot' : ''} {player.handCount > 0 && `· ${player.handCount} cartas`}
+        {player.isBot ? 'bot' : ''}{' '}
+        {player.handCount > 0 && `· ${player.handCount} ${player.handCount === 1 ? 'carta' : 'cartas'}`}
       </span>
 
       {showBid ? (

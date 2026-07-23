@@ -17,6 +17,9 @@ export class RuleError extends Error {}
 
 const BOT_NAMES = ['Beto', 'Carla', 'Dani', 'Elsa', 'Fito'];
 
+/** Segundos que tiene cada jugador para mover antes de que juegue solo. */
+export const TURN_SECONDS = 15;
+
 function log(state: RoomState, message: string) {
   state.log.push(message);
   if (state.log.length > 40) state.log = state.log.slice(-40);
@@ -51,6 +54,8 @@ export function createRoom(code: string, hostName: string, hostId: string, token
     trick: [],
     leadSuit: null,
     lastTrick: null,
+    trickSeq: 0,
+    turnDeadline: null,
     history: [],
     winnerId: null,
     log: [],
@@ -228,7 +233,8 @@ function resolveTrick(state: RoomState) {
   const winner = state.players.find((p) => p.id === winnerId)!;
   winner.tricks += 1;
 
-  state.lastTrick = { cards: [...state.trick], winnerId };
+  state.trickSeq += 1;
+  state.lastTrick = { cards: [...state.trick], winnerId, seq: state.trickSeq };
   log(state, `${winner.name} se llevó la baza.`);
 
   state.trick = [];
@@ -267,9 +273,47 @@ export function nextRound(state: RoomState) {
   startRound(state);
 }
 
+/* ------------------------------------------------------------------ */
+/* Reloj de turno                                                      */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Reinicia el reloj del turno. Se llama después de cada acción, así el plazo
+ * lo fija siempre el servidor y todos los clientes ven la misma cuenta atrás.
+ */
+export function refreshDeadline(state: RoomState) {
+  const activo = state.phase === 'bidding' || state.phase === 'playing';
+  state.turnDeadline = activo ? Date.now() + TURN_SECONDS * 1000 : null;
+}
+
+/**
+ * Juega automáticamente por quien se quedó sin tiempo. Lo dispara cualquier
+ * cliente que vea el plazo vencido, pero el servidor vuelve a comprobar el
+ * reloj: nadie puede apurarle el turno a otro.
+ */
+export function applyTimeout(state: RoomState) {
+  if (state.phase !== 'bidding' && state.phase !== 'playing') {
+    throw new RuleError('No hay ningún turno activo.');
+  }
+  if (state.turnDeadline === null || Date.now() < state.turnDeadline) {
+    throw new RuleError('Todavía queda tiempo.');
+  }
+
+  const player = state.players[state.turnIndex];
+  if (!player) throw new RuleError('No hay nadie en turno.');
+
+  log(state, `${player.name} se quedó sin tiempo.`);
+  if (state.phase === 'bidding') {
+    placeBid(state, player.id, botBid(state, player));
+  } else {
+    playCard(state, player.id, botCard(state, player).id);
+  }
+}
+
 export function playAgain(state: RoomState) {
   if (state.phase !== 'gameOver') throw new RuleError('La partida sigue en curso.');
   state.phase = 'lobby';
+  state.turnDeadline = null;
   state.round = 0;
   state.winnerId = null;
   state.history = [];

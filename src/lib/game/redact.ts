@@ -1,4 +1,4 @@
-import { forbiddenBid } from './engine';
+import { TURN_SECONDS, forbiddenBid } from './engine';
 import { playableCards } from './cards';
 import type { Card, Phase, PlayedCard, RoundHistory, Suit } from './types';
 import type { RoomState } from './types';
@@ -27,7 +27,11 @@ export interface PublicState {
   trumpSuit: Suit | null;
   trick: PlayedCard[];
   leadSuit: Suit | null;
-  lastTrick: { cards: PlayedCard[]; winnerId: string } | null;
+  lastTrick: { cards: PlayedCard[]; winnerId: string; seq: number } | null;
+  turnDeadline: number | null;
+  /** Reloj del servidor al responder: el cliente corrige su propio desfasaje. */
+  serverNow: number;
+  turnSeconds: number;
   history: RoundHistory[];
   winnerId: string | null;
   log: string[];
@@ -72,6 +76,9 @@ export function redact(state: RoomState, viewerId: string | null): PublicState {
     trick: state.trick,
     leadSuit: state.leadSuit,
     lastTrick: state.lastTrick,
+    turnDeadline: state.turnDeadline,
+    serverNow: Date.now(),
+    turnSeconds: TURN_SECONDS,
     history: state.history,
     winnerId: state.winnerId,
     log: state.log.slice(-12),

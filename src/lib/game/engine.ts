@@ -18,7 +18,7 @@ export class RuleError extends Error {}
 const BOT_NAMES = ['Beto', 'Carla', 'Dani', 'Elsa', 'Fito'];
 
 /** Segundos que tiene cada jugador para mover antes de que juegue solo. */
-export const TURN_SECONDS = 15;
+export const TURN_SECONDS = 30;
 
 function log(state: RoomState, message: string) {
   state.log.push(message);

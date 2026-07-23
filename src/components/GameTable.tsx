@@ -46,6 +46,11 @@ export function GameTable({ state, youId, busy, act }: Props) {
     seenSeq.current = seq;
     setReveal(state.lastTrick);
     sndTrickWon();
+
+    // Si esta fue la última baza de la ronda, se queda a la vista hasta que la
+    // pantalla pase al resumen: es la jugada que define la ronda y hay que verla.
+    if (state.phase === 'roundEnd') return;
+
     const timer = setTimeout(() => setReveal(null), REVEAL_MS);
     return () => clearTimeout(timer);
   }, [state.lastTrick?.seq]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -254,6 +259,11 @@ export function GameTable({ state, youId, busy, act }: Props) {
             {reveal && (
               <p className="text-sm font-semibold text-emerald-300">
                 {nameOf(reveal.winnerId)} se llevó la baza
+                {state.phase === 'roundEnd' && (
+                  <span className="block text-white/50">
+                    Última de la ronda · va la tabla…
+                  </span>
+                )}
               </p>
             )}
           </>

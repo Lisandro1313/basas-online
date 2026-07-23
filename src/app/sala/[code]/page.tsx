@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useEffect, useState } from 'react';
+import { use, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { AudioControls } from '@/components/AudioControls';
 import { GameOver } from '@/components/GameOver';
@@ -9,6 +9,9 @@ import { Lobby } from '@/components/Lobby';
 import { RoundSummary } from '@/components/RoundSummary';
 import { useRoom } from '@/lib/client/useRoom';
 import { lastName, loadSession, rememberName, saveSession, type Session } from '@/lib/client/session';
+
+/** Cuánto se queda la última baza de la ronda a la vista antes del resumen. */
+const ROUND_END_HOLD_MS = 5000;
 
 export default function RoomPage({ params }: { params: Promise<{ code: string }> }) {
   const { code: rawCode } = use(params);
@@ -24,6 +27,27 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
 
   const room = useRoom(code, session);
   const { state } = room;
+
+  /**
+   * Al jugarse la última carta la ronda termina de una, así que el resumen
+   * taparía la baza que la define. Retenemos la mesa unos segundos para verla.
+   */
+  const [holdTable, setHoldTable] = useState(false);
+  const prevPhase = useRef<string | null>(null);
+
+  useEffect(() => {
+    const phase = state?.phase ?? null;
+    const previo = prevPhase.current;
+    prevPhase.current = phase;
+
+    // Solo si venimos de jugar: quien entra o recarga en pleno resumen no espera.
+    if (previo === 'playing' && phase === 'roundEnd') {
+      setHoldTable(true);
+      const id = setTimeout(() => setHoldTable(false), ROUND_END_HOLD_MS);
+      return () => clearTimeout(id);
+    }
+    if (phase !== 'roundEnd') setHoldTable(false);
+  }, [state?.phase]);
 
   // Si el servidor ya no reconoce nuestra identidad, volvemos a pedir el nombre.
   const knownPlayer = Boolean(
@@ -53,6 +77,8 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
 
   const youId = session!.playerId;
   const props = { state, youId, busy: room.busy, act: room.act };
+  const showTable =
+    state.phase === 'bidding' || state.phase === 'playing' || holdTable;
 
   return (
     <main className="min-h-dvh">
@@ -82,8 +108,8 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
       )}
 
       {state.phase === 'lobby' && <Lobby {...props} />}
-      {(state.phase === 'bidding' || state.phase === 'playing') && <GameTable {...props} />}
-      {state.phase === 'roundEnd' && <RoundSummary {...props} />}
+      {showTable && <GameTable {...props} />}
+      {state.phase === 'roundEnd' && !holdTable && <RoundSummary {...props} />}
       {state.phase === 'gameOver' && <GameOver {...props} />}
     </main>
   );

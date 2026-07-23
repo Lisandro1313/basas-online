@@ -44,7 +44,9 @@ export function GameTable({ state, youId, busy, act }: Props) {
   useEffect(() => {
     const seq = state.lastTrick?.seq ?? 0;
     if (seenSeq.current === null) {
-      seenSeq.current = seq; // primer render: no revivimos bazas viejas
+      seenSeq.current = seq; // primer render: no revivimos bazas viejas…
+      // …salvo que la ronda acabe de terminar, que es justo la baza a mirar.
+      if (state.phase === 'roundEnd' && state.lastTrick) setReveal(state.lastTrick);
       return;
     }
     if (seq === seenSeq.current || !state.lastTrick) return;

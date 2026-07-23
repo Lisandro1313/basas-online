@@ -35,19 +35,26 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
   const [holdTable, setHoldTable] = useState(false);
   const prevPhase = useRef<string | null>(null);
 
-  useEffect(() => {
-    const phase = state?.phase ?? null;
+  // Se calcula durante el render, no en un efecto: si esperáramos al efecto, el
+  // render en el que la fase pasa a 'roundEnd' vería holdTable todavía en false
+  // y desmontaría la mesa por un instante, perdiendo la última baza.
+  if (state && prevPhase.current !== state.phase) {
     const previo = prevPhase.current;
-    prevPhase.current = phase;
+    prevPhase.current = state.phase;
 
-    // Solo si venimos de jugar: quien entra o recarga en pleno resumen no espera.
-    if (previo === 'playing' && phase === 'roundEnd') {
-      setHoldTable(true);
-      const id = setTimeout(() => setHoldTable(false), ROUND_END_HOLD_MS);
-      return () => clearTimeout(id);
+    // Solo si veníamos jugando: quien entra o recarga en pleno resumen no espera.
+    if (previo === 'playing' && state.phase === 'roundEnd') {
+      if (!holdTable) setHoldTable(true);
+    } else if (state.phase !== 'roundEnd' && holdTable) {
+      setHoldTable(false);
     }
-    if (phase !== 'roundEnd') setHoldTable(false);
-  }, [state?.phase]);
+  }
+
+  useEffect(() => {
+    if (!holdTable) return;
+    const id = setTimeout(() => setHoldTable(false), ROUND_END_HOLD_MS);
+    return () => clearTimeout(id);
+  }, [holdTable]);
 
   // Si el servidor ya no reconoce nuestra identidad, volvemos a pedir el nombre.
   const knownPlayer = Boolean(

@@ -106,6 +106,12 @@ export default function Home() {
           <li>Si clavás tu predicción: <b>10 + 3 por baza</b>. Si errás, solo las bazas que hiciste.</li>
         </ul>
       </details>
+
+      <footer className="pt-2 text-center">
+        <p className="text-xs tracking-wide text-white/35">
+          Hecho por <span className="text-white/55">Lisandro Etcheverry</span>
+        </p>
+      </footer>
     </main>
   );
 }

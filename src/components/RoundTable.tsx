@@ -148,7 +148,7 @@ export function RoundTable({ state, youId, onTable, reveal, reactions }: Props) 
           <div
             key={player.id}
             className="absolute z-10 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center"
-            style={at(seat, 45, 43)}
+            style={at(seat, 44, 38)}
           >
             {reaction && (
               <div

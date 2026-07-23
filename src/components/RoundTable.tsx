@@ -48,6 +48,7 @@ export function RoundTable({ state, youId, onTable, reveal, reactions }: Props) 
   const nameSize = 'clamp(9px, 3cqmin, 13px)';
   const dataSize = 'clamp(9px, 2.8cqmin, 12px)';
   const tinySize = 'clamp(8px, 2.4cqmin, 11px)';
+  const labelSize = 'clamp(10px, 3.4cqmin, 15px)';
 
   return (
     <div
@@ -59,10 +60,10 @@ export function RoundTable({ state, youId, onTable, reveal, reactions }: Props) 
         <div className="table-felt absolute inset-[3.5%] rounded-[50%]" />
       </div>
 
-      {/* Triunfo, fijo a la izquierda del paño */}
+      {/* Triunfo, fijo pegado a la izquierda del paño */}
       {state.trumpCard && (
         <div
-          className="absolute top-1/2 left-[19%] z-10 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-1"
+          className="absolute top-1/2 left-[13%] z-10 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-0.5"
           style={{ containerType: 'inline-size', width: trumpW }}
         >
           <span className="font-semibold text-white/70" style={{ fontSize: tinySize }}>
@@ -77,10 +78,10 @@ export function RoundTable({ state, youId, onTable, reveal, reactions }: Props) 
         </div>
       )}
 
-      {/* Cartas jugadas en fila, al lado del triunfo */}
+      {/* Cartas jugadas, en fila centrada en el paño */}
       <div
-        className="absolute top-1/2 left-[58%] z-10 flex -translate-x-1/2 -translate-y-1/2 items-end justify-center"
-        style={{ gap: '2%', width: '58%' }}
+        className="absolute top-[41%] left-1/2 z-10 flex -translate-x-1/2 -translate-y-1/2 items-end justify-center"
+        style={{ gap: '2%', maxWidth: '62%' }}
       >
         {onTable.length === 0 ? (
           <span className="text-white/30" style={{ fontSize: tinySize }}>
@@ -96,7 +97,10 @@ export function RoundTable({ state, youId, onTable, reveal, reactions }: Props) 
               <div className="w-full drop-shadow-lg">
                 <PlayingCard card={played.card} fluid />
               </div>
-              <span className="max-w-full truncate text-white/70" style={{ fontSize: tinySize }}>
+              <span
+                className="max-w-full truncate font-medium text-white/85"
+                style={{ fontSize: labelSize }}
+              >
                 {nameOf(played.playerId)}
               </span>
             </div>
@@ -104,29 +108,13 @@ export function RoundTable({ state, youId, onTable, reveal, reactions }: Props) 
         )}
       </div>
 
-      {/* Aviso de quién se llevó la baza */}
+      {/* Aviso de quién se llevó la baza, centrado y despejado de los asientos */}
       {winnerName && onTable.length > 0 && (
         <div
-          className="pointer-events-none absolute top-[74%] left-1/2 z-20 -translate-x-1/2 rounded-full bg-black/70 px-2.5 py-1 font-bold text-emerald-300 shadow-lg"
+          className="pointer-events-none absolute top-[63%] left-1/2 z-20 -translate-x-1/2 rounded-full bg-black/75 px-2.5 py-1 font-bold text-emerald-300 shadow-lg"
           style={{ fontSize: nameSize }}
         >
           {winnerName} se la llevó
-        </div>
-      )}
-
-      {/* Botón del repartidor */}
-      {state.phase !== 'lobby' && (
-        <div
-          className="absolute z-10 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-linear-to-b from-amber-200 to-amber-400 font-black text-slate-900 shadow-md"
-          style={{
-            ...at((state.dealerIndex - youIndex + total) % total, 33, 28),
-            width: 'clamp(14px, 5cqmin, 22px)',
-            height: 'clamp(14px, 5cqmin, 22px)',
-            fontSize: 'clamp(8px, 2.6cqmin, 11px)',
-          }}
-          title="Reparte"
-        >
-          D
         </div>
       )}
 
@@ -134,9 +122,13 @@ export function RoundTable({ state, youId, onTable, reveal, reactions }: Props) 
       {state.players.map((player, index) => {
         const seat = (index - youIndex + total) % total;
         const isTurn = index === state.turnIndex && state.phase !== 'roundEnd';
+        const isDealer = index === state.dealerIndex;
         const isYou = player.id === youId;
         const madeIt = player.bid !== null && player.tricks === player.bid;
         const reaction = reactions.get(player.id);
+        // El masito va hacia el centro del paño: a la derecha si el asiento está
+        // en la mitad izquierda, a la izquierda si está en la derecha.
+        const pileOnLeft = Math.cos(angleOf(seat)) > 0.15;
 
         return (
           <div
@@ -161,6 +153,31 @@ export function RoundTable({ state, youId, onTable, reveal, reactions }: Props) 
               style={{ width: avatar, height: avatar }}
             >
               <Avatar name={player.name} avatar={player.avatar} fluid />
+
+              {/* Insignia del repartidor, sobre el avatar */}
+              {isDealer && state.phase !== 'lobby' && (
+                <span
+                  className="absolute -right-1 -bottom-1 z-20 flex items-center justify-center rounded-full bg-linear-to-b from-amber-200 to-amber-400 font-black text-slate-900 shadow-md ring-2 ring-slate-950"
+                  style={{
+                    width: 'clamp(13px, 4.6cqmin, 20px)',
+                    height: 'clamp(13px, 4.6cqmin, 20px)',
+                    fontSize: 'clamp(8px, 2.6cqmin, 11px)',
+                  }}
+                  title="Reparte"
+                >
+                  D
+                </span>
+              )}
+
+              {/* Masito: bazas ganadas, hacia el centro del paño */}
+              {player.tricks > 0 && (
+                <div
+                  className="absolute top-1/2 -translate-y-1/2"
+                  style={pileOnLeft ? { right: '104%' } : { left: '104%' }}
+                >
+                  <TrickPile count={player.tricks} />
+                </div>
+              )}
             </div>
 
             <div
@@ -193,11 +210,6 @@ export function RoundTable({ state, youId, onTable, reveal, reactions }: Props) 
                 {player.points} pts
               </p>
             </div>
-
-            {/* Masito: una carta boca abajo por cada baza ganada */}
-            {player.tricks > 0 && (
-              <TrickPile count={player.tricks} />
-            )}
           </div>
         );
       })}

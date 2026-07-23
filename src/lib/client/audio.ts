@@ -360,50 +360,83 @@ export function playStickerSound(sound: string | null) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Música de fondo                                                     */
+/* Música de fondo: house alegre, sintética                            */
 /* ------------------------------------------------------------------ */
 
-// Pentatónica de La menor: cualquier combinación suena bien, así que puede
-// improvisar al azar sin desafinar nunca.
-const SCALE = [220, 261.63, 293.66, 329.63, 392, 440, 523.25, 587.33];
-const BASS = [110, 130.81, 146.83, 164.81];
+// Do mayor pentatónica: siempre suena luminosa, nunca triste.
+const LEAD = [523.25, 587.33, 659.25, 783.99, 880, 1046.5];
+const BASS_NOTES = [130.81, 130.81, 174.61, 196]; // C C F G, un giro alegre
+let barIndex = 0;
 
-/**
- * Nota de cuerda pulsada. Tres osciladores levemente desafinados entre sí y un
- * lowpass que se cierra: eso es lo que separa una cuerda de un pitido de sine
- * pelado.
- */
-function pluck(freq: number, when: number, gainValue: number) {
+/** Nota de sinte con filtro: sierra + lowpass resonante, brillante y eléctrica. */
+function synth(freq: number, when: number, dur: number, gainValue: number, cutoff = 2600) {
   const ac = ctx;
   if (!ac || !musicGain || !wet) return;
 
   const env = ac.createGain();
   env.gain.setValueAtTime(0, when);
-  env.gain.linearRampToValueAtTime(gainValue, when + 0.06);
-  env.gain.exponentialRampToValueAtTime(0.0001, when + 3);
+  env.gain.linearRampToValueAtTime(gainValue, when + 0.012);
+  env.gain.exponentialRampToValueAtTime(0.0001, when + dur);
 
   const filter = ac.createBiquadFilter();
   filter.type = 'lowpass';
-  filter.Q.value = 0.8;
-  filter.frequency.setValueAtTime(2200, when);
-  filter.frequency.exponentialRampToValueAtTime(600, when + 2.4);
+  filter.Q.value = 4;
+  filter.frequency.setValueAtTime(cutoff, when);
+  filter.frequency.exponentialRampToValueAtTime(700, when + dur);
 
-  for (const detune of [-6, 0, 7]) {
+  for (const detune of [-7, 7]) {
     const osc = ac.createOscillator();
-    osc.type = 'triangle';
+    osc.type = 'sawtooth';
     osc.frequency.value = freq;
     osc.detune.value = detune;
     osc.connect(filter);
     osc.start(when);
-    osc.stop(when + 3.1);
+    osc.stop(when + dur + 0.02);
   }
-
   filter.connect(env);
   env.connect(musicGain);
   env.connect(wet);
 }
 
-/** Loop ambiental generativo: no se repite nunca igual, así no cansa. */
+/** Bombo electrónico: seno que cae rápido de tono. */
+function kick(when: number, gainValue: number) {
+  const ac = ctx;
+  if (!ac || !musicGain) return;
+  const osc = ac.createOscillator();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(150, when);
+  osc.frequency.exponentialRampToValueAtTime(50, when + 0.12);
+  const g = ac.createGain();
+  g.gain.setValueAtTime(gainValue, when);
+  g.gain.exponentialRampToValueAtTime(0.0001, when + 0.16);
+  osc.connect(g).connect(musicGain);
+  osc.start(when);
+  osc.stop(when + 0.18);
+}
+
+/** Hi-hat: ruidito corto y agudo, marca el offbeat. */
+function hat(when: number, gainValue: number) {
+  const ac = ctx;
+  if (!ac || !musicGain) return;
+  const src = ac.createBufferSource();
+  src.buffer = noiseBuffer(ac);
+  src.loop = true;
+  const hp = ac.createBiquadFilter();
+  hp.type = 'highpass';
+  hp.frequency.value = 8000;
+  const g = ac.createGain();
+  g.gain.setValueAtTime(gainValue, when);
+  g.gain.exponentialRampToValueAtTime(0.0001, when + 0.05);
+  src.connect(hp).connect(g).connect(musicGain);
+  src.start(when);
+  src.stop(when + 0.06);
+}
+
+/**
+ * Loop house alegre: 8 pasos por compás (~112 BPM), con bombo en negras, hats
+ * en las corcheas, bajo saltarín y un arpegio brillante que se rearma solo.
+ * No se repite igual porque el arpegio se elige al azar dentro de la escala.
+ */
 export function startMusic() {
   const ac = audio();
   if (!ac || !master || musicTimer) return;
@@ -415,20 +448,30 @@ export function startMusic() {
   }
   musicGain.gain.cancelScheduledValues(ac.currentTime);
   musicGain.gain.setValueAtTime(musicGain.gain.value, ac.currentTime);
-  musicGain.gain.linearRampToValueAtTime(0.13, ac.currentTime + 2.5);
+  musicGain.gain.linearRampToValueAtTime(0.12, ac.currentTime + 1.5);
 
+  const step = 0.268; // ~112 BPM en corcheas
   const bar = () => {
     if (!ctx) return;
-    const t = ctx.currentTime;
-    pluck(BASS[Math.floor(Math.random() * BASS.length)], t, 0.42);
-    const notes = 2 + Math.floor(Math.random() * 2);
-    for (let i = 0; i < notes; i++) {
-      pluck(SCALE[Math.floor(Math.random() * SCALE.length)], t + 0.7 + i * 0.95, 0.22);
+    const t = ctx.currentTime + 0.05;
+    const root = BASS_NOTES[barIndex % BASS_NOTES.length];
+    barIndex++;
+
+    for (let i = 0; i < 8; i++) {
+      const w = t + i * step;
+      if (i % 2 === 0) kick(w, 0.5); // bombo en cada negra
+      if (i % 2 === 1) hat(w, 0.12); // hat en el offbeat
+      // bajo saltarín: raíz y su octava
+      synth(i % 4 === 0 ? root : root * 1.5, w, 0.22, 0.14, 1200);
+    }
+    // arpegio brillante encima, 4 notas al azar
+    for (let i = 0; i < 4; i++) {
+      synth(LEAD[Math.floor(Math.random() * LEAD.length)], t + i * step * 2, 0.4, 0.09, 3000);
     }
   };
 
   bar();
-  musicTimer = setInterval(bar, 3800);
+  musicTimer = setInterval(bar, step * 8 * 1000);
 }
 
 export function stopMusic() {

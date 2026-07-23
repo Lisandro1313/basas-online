@@ -8,6 +8,7 @@ export interface PublicPlayer {
   name: string;
   isBot: boolean;
   avatar: string | null;
+  emotes: string[];
   handCount: number;
   bid: number | null;
   tricks: number;
@@ -71,6 +72,7 @@ export function redact(state: RoomState, viewerId: string | null): PublicState {
       name: p.name,
       isBot: p.isBot,
       avatar: p.avatar,
+      emotes: p.emotes ?? [],
       handCount: p.hand.length,
       bid: p.bid,
       tricks: p.tricks,

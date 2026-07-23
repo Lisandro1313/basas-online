@@ -7,6 +7,24 @@ import { getSticker } from '@/lib/game/stickers';
  * video propio dejado en /public/emotes/<id>.mp4. Todo dentro de un círculo.
  */
 export function AnimatedEmote({ id, size = 56 }: { id: string; size?: number }) {
+  // Emote de video propio: `url:https://res.cloudinary.com/...`
+  if (id.startsWith('url:')) {
+    return (
+      <span
+        className="inline-block overflow-hidden rounded-full ring-2 ring-white/60"
+        style={{ width: size, height: size }}
+      >
+        <video
+          src={id.slice(4)}
+          autoPlay
+          loop
+          playsInline
+          className="h-full w-full object-cover"
+        />
+      </span>
+    );
+  }
+
   const sticker = getSticker(id);
   if (!sticker) return null;
 

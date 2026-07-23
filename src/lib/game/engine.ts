@@ -9,7 +9,14 @@ import {
   SUIT_NAME,
   valueLabel,
 } from './cards';
-import { AVATAR_EMOJIS, MAX_AVATAR_CHARS, MAX_PLAYERS, MAX_REACTIONS, MIN_PLAYERS } from './types';
+import {
+  AVATAR_EMOJIS,
+  MAX_AVATAR_CHARS,
+  MAX_CUSTOM_EMOTES,
+  MAX_PLAYERS,
+  MAX_REACTIONS,
+  MIN_PLAYERS,
+} from './types';
 import { isValidSticker } from './stickers';
 import type { Card, Player, RoomState, RoundResult, Suit } from './types';
 
@@ -82,7 +89,21 @@ export function buildRoundPlan(rounds: number, playerCount: number): number[] {
     plan.push(pool.pop()!);
   }
 
+  // La última mano es siempre al máximo de cartas (y se juega sin triunfo).
+  plan[rounds - 1] = max;
+  if (rounds >= 2 && plan[rounds - 2] === max) {
+    const prev = rounds >= 3 ? plan[rounds - 3] : -1;
+    let alt = max > 1 ? max - 1 : 2;
+    if (alt === prev) alt = alt > 1 ? alt - 1 : alt + 1;
+    plan[rounds - 2] = Math.max(1, Math.min(max, alt));
+  }
+
   return plan;
+}
+
+/** La última ronda se juega sin triunfo: todo se define por el palo de salida. */
+export function isLastRound(state: RoomState): boolean {
+  return state.round === state.totalRounds;
 }
 
 export function createRoom(code: string, hostName: string, hostId: string, token: string): RoomState {
@@ -130,6 +151,7 @@ export function addPlayer(state: RoomState, id: string, name: string, token: str
     name: clean,
     isBot: false,
     avatar: null,
+    emotes: [],
     hand: [],
     bid: null,
     tricks: 0,
@@ -139,11 +161,39 @@ export function addPlayer(state: RoomState, id: string, name: string, token: str
   log(state, `${clean} entró a la sala.`);
 }
 
+/** Solo se aceptan videos servidos por Cloudinary, para no cargar URLs random. */
+export function isCloudinaryVideo(url: string): boolean {
+  try {
+    const u = new URL(url);
+    return (
+      u.protocol === 'https:' &&
+      u.hostname === 'res.cloudinary.com' &&
+      /\.(mp4|webm)$/i.test(u.pathname)
+    );
+  } catch {
+    return false;
+  }
+}
+
+/** Registra un emote de video propio (URL de Cloudinary) en el jugador. */
+export function addEmote(state: RoomState, playerId: string, url: string) {
+  const player = state.players.find((p) => p.id === playerId);
+  if (!player) throw new RuleError('No estás en esta sala.');
+  if (!isCloudinaryVideo(url)) throw new RuleError('Ese video no es válido.');
+  if (player.emotes.includes(url)) return;
+  player.emotes = [...player.emotes, url].slice(-MAX_CUSTOM_EMOTES);
+}
+
 /** Tira un sticker a la mesa. Anti-spam: uno cada 700 ms por jugador. */
 export function sendReaction(state: RoomState, playerId: string, sticker: string) {
   const player = state.players.find((p) => p.id === playerId);
   if (!player) throw new RuleError('No estás en esta sala.');
-  if (!isValidSticker(sticker)) throw new RuleError('Ese sticker no existe.');
+  // El sticker es o un id del catálogo, o `url:<video de Cloudinary>`.
+  if (sticker.startsWith('url:')) {
+    if (!isCloudinaryVideo(sticker.slice(4))) throw new RuleError('Ese video no es válido.');
+  } else if (!isValidSticker(sticker)) {
+    throw new RuleError('Ese sticker no existe.');
+  }
 
   const now = Date.now();
   const ultima = [...state.reactions].reverse().find((r) => r.playerId === playerId);
@@ -188,6 +238,7 @@ export function addBot(state: RoomState) {
     name,
     isBot: true,
     avatar: `emoji:${AVATAR_EMOJIS[state.players.length % AVATAR_EMOJIS.length]}`,
+    emotes: [],
     hand: [],
     bid: null,
     tricks: 0,
@@ -238,7 +289,9 @@ export function startRound(state: RoomState) {
   const count = state.players.length;
   const perPlayer = state.roundCards[nextRound - 1] ?? maxCardsPerRound(count);
   const { hands, rest } = deal(shuffle(createDeck()), count, perPlayer);
-  const trumpCard = rest[0] ?? null;
+  // La última mano se juega sin triunfo.
+  const lastRound = nextRound === state.totalRounds;
+  const trumpCard = lastRound ? null : rest[0] ?? null;
 
   state.round = nextRound;
   state.cardsThisRound = perPlayer;

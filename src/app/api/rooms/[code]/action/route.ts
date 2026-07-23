@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import {
   RuleError,
   addBot,
+  addEmote,
   applyBotMove,
   applyTimeout,
   nextRound,
@@ -106,6 +107,11 @@ export async function POST(
         case 'react':
           if (typeof body.sticker !== 'string') throw new RuleError('Falta el sticker.');
           sendReaction(draft, playerId, body.sticker);
+          break;
+
+        case 'addEmote':
+          if (typeof body.url !== 'string') throw new RuleError('Falta el video.');
+          addEmote(draft, playerId, body.url);
           break;
 
         case 'leave':

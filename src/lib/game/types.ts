@@ -18,6 +18,8 @@ export interface Player {
    * null = se muestra la inicial del nombre.
    */
   avatar: string | null;
+  /** Emotes de video propios (URLs de Cloudinary). Cortos, tope de 4. */
+  emotes: string[];
   hand: Card[];
   /** null = todavía no apostó. Ojo: 0 es una apuesta válida. */
   bid: number | null;
@@ -112,3 +114,6 @@ export const MAX_PLAYERS = 8;
 export const MAX_AVATAR_CHARS = 40_000;
 
 export const AVATAR_EMOJIS = ['🦊', '🐺', '🦉', '🐸', '🐼', '🦁', '🐯', '🐵', '🦈', '🐙', '🦖', '🐝'];
+
+/** Cuántos emotes de video propios puede guardar cada jugador. */
+export const MAX_CUSTOM_EMOTES = 4;

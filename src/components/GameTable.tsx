@@ -181,20 +181,52 @@ export function GameTable({ state, youId, busy, act }: Props) {
           style={{ boxShadow: 'inset 0 0 100px 18px rgba(244, 63, 94, 0.85)' }}
         />
       )}
-      {/* Cabecera: ronda (el triunfo ahora vive en la mesa) */}
-      <div className="flex items-center justify-between gap-2 rounded-xl border border-white/10 bg-slate-950/70 px-4 py-2 text-sm">
-        <span>
-          Ronda <b>{state.round}</b>/{state.totalRounds} · {state.cardsThisRound} cartas
-        </span>
-        {state.hostId === youId && (
-          <button
-            onClick={() => void act({ type: 'pause' })}
-            disabled={busy}
-            title="Pausar el juego"
-            className="rounded-lg bg-white/15 px-2 py-1 text-xs font-semibold hover:bg-white/25 disabled:opacity-40"
-          >
-            ⏸ Pausa
-          </button>
+      {/* Cabecera: ronda + tira de manos (el triunfo vive en la mesa) */}
+      <div className="space-y-2 rounded-xl border border-white/10 bg-slate-950/70 px-4 py-2 text-sm">
+        <div className="flex items-center justify-between gap-2">
+          <span>
+            Ronda <b>{state.round}</b>/{state.totalRounds} · {state.cardsThisRound} cartas
+          </span>
+          {state.hostId === youId && (
+            <button
+              onClick={() => void act({ type: 'pause' })}
+              disabled={busy}
+              title="Pausar el juego"
+              className="rounded-lg bg-white/15 px-2 py-1 text-xs font-semibold hover:bg-white/25 disabled:opacity-40"
+            >
+              ⏸ Pausa
+            </button>
+          )}
+        </div>
+
+        {/* Cuántas cartas se juegan en cada mano; la actual resaltada */}
+        {state.roundCards.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {state.roundCards.map((n, i) => {
+              const round = i + 1;
+              const done = round < state.round;
+              const current = round === state.round;
+              const noTrump = round === state.totalRounds;
+              return (
+                <span
+                  key={i}
+                  title={`Mano ${round}: ${n} carta${n === 1 ? '' : 's'}${
+                    noTrump ? ', sin triunfo' : ''
+                  }`}
+                  className={`flex h-6 min-w-6 items-center justify-center rounded px-1 text-xs font-bold ${
+                    current
+                      ? 'bg-amber-400 text-slate-900'
+                      : done
+                        ? 'bg-white/10 text-white/40'
+                        : 'bg-white/5 text-white/70'
+                  }`}
+                >
+                  {n}
+                  {noTrump && <span className="ml-0.5 text-[9px] opacity-70">∅</span>}
+                </span>
+              );
+            })}
+          </div>
         )}
       </div>
 
@@ -245,7 +277,11 @@ export function GameTable({ state, youId, busy, act }: Props) {
         reactions={reactions}
       />
 
-      <StickerBar busy={busy} act={act} />
+      <StickerBar
+        busy={busy}
+        myEmotes={state.players.find((p) => p.id === youId)?.emotes ?? []}
+        act={act}
+      />
 
       {reveal && state.phase === 'roundEnd' && (
         <p className="text-center text-sm text-white/60">Última de la ronda · va la tabla…</p>

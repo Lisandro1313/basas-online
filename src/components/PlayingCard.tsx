@@ -31,9 +31,9 @@ export function PlayingCard({ card, size = 'md', disabled, selected, glow, onCli
       aria-label={`${valueLabel(card.value)} de ${card.suit}`}
       className={[
         SIZES[size],
-        'deal-in relative flex flex-col items-center justify-center rounded-lg border bg-white font-bold shadow-md transition',
+        'deal-in relative flex flex-col items-center justify-center rounded-md border bg-linear-to-b from-white to-slate-100 font-bold shadow-lg transition',
         red ? 'text-rose-600' : 'text-slate-900',
-        selected ? 'border-amber-400 ring-2 ring-amber-400' : 'border-slate-300',
+        selected ? 'border-amber-400 ring-2 ring-amber-400' : 'border-slate-400/60',
         interactive
           ? 'cursor-pointer hover:-translate-y-2 hover:shadow-xl'
           : 'cursor-default',
@@ -41,12 +41,12 @@ export function PlayingCard({ card, size = 'md', disabled, selected, glow, onCli
         disabled && onClick ? 'opacity-40 saturate-50' : '',
       ].join(' ')}
     >
-      <span className="absolute top-1 left-1.5 text-[0.65em] leading-none">
-        {valueLabel(card.value)}
+      <span className="absolute top-0.5 left-1 flex flex-col items-center leading-none">
+        <span className="text-[0.95em] font-black">{valueLabel(card.value)}</span>
+        <span className="text-[0.6em]">{SUIT_SYMBOL[card.suit]}</span>
       </span>
-      <span className="text-[1.6em] leading-none">{SUIT_SYMBOL[card.suit]}</span>
-      <span className="absolute right-1.5 bottom-1 rotate-180 text-[0.65em] leading-none">
-        {valueLabel(card.value)}
+      <span className="translate-x-[0.18em] translate-y-[0.12em] text-[1.75em] leading-none">
+        {SUIT_SYMBOL[card.suit]}
       </span>
     </button>
   );

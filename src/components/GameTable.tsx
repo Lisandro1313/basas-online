@@ -31,6 +31,12 @@ export function GameTable({ state, youId, busy, act }: Props) {
   const turnPlayer = state.players[state.turnIndex];
   const nameOf = (id: string) => state.players.find((p) => p.id === id)?.name ?? '';
 
+  /* --- Desfasaje contra el reloj del servidor ----------------------------- */
+  const offset = useRef(0);
+  useEffect(() => {
+    offset.current = state.serverNow - Date.now();
+  }, [state.serverNow]);
+
   /* --- Baza ganada: se muestra un momento y después la mesa queda vacía --- */
   const [reveal, setReveal] = useState<PublicState['lastTrick']>(null);
   const seenSeq = useRef<number | null>(null);
@@ -51,16 +57,17 @@ export function GameTable({ state, youId, busy, act }: Props) {
     // pantalla pase al resumen: es la jugada que define la ronda y hay que verla.
     if (state.phase === 'roundEnd') return;
 
-    const timer = setTimeout(() => setReveal(null), REVEAL_MS);
+    // Se recoge cuando el servidor levanta la pausa, así todos ven lo mismo.
+    const hasta = state.trickPauseUntil;
+    const ms = hasta
+      ? Math.max(1000, hasta - (Date.now() + offset.current))
+      : REVEAL_MS;
+
+    const timer = setTimeout(() => setReveal(null), ms);
     return () => clearTimeout(timer);
   }, [state.lastTrick?.seq]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /* --- Reloj del turno, corregido contra el reloj del servidor ------------ */
-  const offset = useRef(0);
-  useEffect(() => {
-    offset.current = state.serverNow - Date.now();
-  }, [state.serverNow]);
-
+  /* --- Reloj del turno ---------------------------------------------------- */
   const [remaining, setRemaining] = useState(0);
   useEffect(() => {
     if (!state.turnDeadline) {
@@ -169,7 +176,7 @@ export function GameTable({ state, youId, busy, act }: Props) {
         />
       )}
       {/* Cabecera: ronda y triunfo */}
-      <div className="flex items-center justify-between gap-2 rounded-xl border border-white/15 bg-black/30 px-4 py-2 text-sm">
+      <div className="flex items-center justify-between gap-2 rounded-xl border border-white/10 bg-slate-950/70 px-4 py-2 text-sm">
         <span>
           Ronda <b>{state.round}</b>/{state.totalRounds} · {state.cardsThisRound} cartas
         </span>
@@ -245,7 +252,7 @@ export function GameTable({ state, youId, busy, act }: Props) {
 
       {/* Panel de apuesta */}
       {state.phase === 'bidding' && you && (
-        <div className="rounded-2xl border border-white/15 bg-black/30 p-4">
+        <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
           {you.isYourTurn ? (
             <>
               <p
@@ -331,7 +338,7 @@ export function GameTable({ state, youId, busy, act }: Props) {
       )}
 
       {/* Registro */}
-      <details className="rounded-xl border border-white/10 bg-black/20 px-4 py-2 text-sm">
+      <details className="rounded-xl border border-white/10 bg-slate-950/60 px-4 py-2 text-sm">
         <summary className="cursor-pointer text-white/60">Historial de la mano</summary>
         <ul className="mt-2 space-y-0.5 text-white/70">
           {state.log.map((line, i) => (

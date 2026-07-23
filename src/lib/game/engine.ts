@@ -29,6 +29,13 @@ export const PAUSE_SECONDS = 180;
 /** Lo que "piensa" un bot antes de mover, para que se pueda seguir la mano. */
 export const BOT_DELAY_SECONDS = 2;
 
+/**
+ * Cuánto se queda una baza ganada sobre la mesa antes de que alguien pueda
+ * seguir jugando. Sin esto, la última carta se ve un suspiro: se juega, la baza
+ * se resuelve y se recoge todo antes de que llegues a mirar quién ganó.
+ */
+export const TRICK_REVEAL_SECONDS = 3;
+
 function log(state: RoomState, message: string) {
   state.log.push(message);
   if (state.log.length > 40) state.log = state.log.slice(-40);
@@ -98,6 +105,7 @@ export function createRoom(code: string, hostName: string, hostId: string, token
     turnDeadline: null,
     pausedAt: null,
     botReadyAt: null,
+    trickPauseUntil: null,
     history: [],
     winnerId: null,
     log: [],
@@ -221,6 +229,7 @@ export function startRound(state: RoomState) {
   state.trick = [];
   state.leadSuit = null;
   state.lastTrick = null;
+  state.trickPauseUntil = null;
   state.phase = 'bidding';
   state.players = state.players.map((p, i) => ({
     ...p,
@@ -282,6 +291,9 @@ export function placeBid(state: RoomState, playerId: string, bid: number) {
 export function playCard(state: RoomState, playerId: string, cardId: string) {
   if (state.pausedAt !== null) throw new RuleError('El juego está pausado.');
   if (state.phase !== 'playing') throw new RuleError('No es momento de jugar cartas.');
+  if (state.trickPauseUntil !== null && Date.now() < state.trickPauseUntil) {
+    throw new RuleError('Esperá a que se recojan las cartas.');
+  }
   const player = state.players[state.turnIndex];
   if (!player || player.id !== playerId) throw new RuleError('No es tu turno.');
 
@@ -324,7 +336,12 @@ function resolveTrick(state: RoomState) {
   state.turnIndex = state.players.findIndex((p) => p.id === winnerId);
 
   const roundOver = state.players.every((p) => p.hand.length === 0);
-  if (roundOver) scoreRound(state);
+  if (roundOver) {
+    scoreRound(state);
+  } else {
+    // Nadie juega hasta que la baza se haya visto.
+    state.trickPauseUntil = Date.now() + TRICK_REVEAL_SECONDS * 1000;
+  }
 }
 
 /** Si clavás la apuesta: 10 + 3 por baza. Si no: solo las bazas ganadas. */
@@ -380,11 +397,15 @@ export function refreshTimers(state: RoomState) {
     return;
   }
 
+  // Si se está mostrando una baza, los relojes arrancan cuando termine: nadie
+  // pierde tiempo de turno mirando las cartas sobre la mesa.
+  const desde = Math.max(Date.now(), state.trickPauseUntil ?? 0);
+
   if (state.players[state.turnIndex]?.isBot) {
     state.turnDeadline = null;
-    state.botReadyAt = Date.now() + BOT_DELAY_SECONDS * 1000;
+    state.botReadyAt = desde + BOT_DELAY_SECONDS * 1000;
   } else {
-    state.turnDeadline = Date.now() + TURN_SECONDS * 1000;
+    state.turnDeadline = desde + TURN_SECONDS * 1000;
     state.botReadyAt = null;
   }
 }
@@ -545,6 +566,9 @@ export function runBots(state: RoomState) {
     if (state.phase !== 'bidding' && state.phase !== 'playing') return;
     const player = state.players[state.turnIndex];
     if (!player || !player.isBot) return;
+
+    // Modo instantáneo: no esperamos a que se recoja la baza anterior.
+    state.trickPauseUntil = null;
 
     if (state.phase === 'bidding') {
       placeBid(state, player.id, botBid(state, player));

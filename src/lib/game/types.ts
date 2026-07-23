@@ -75,6 +75,11 @@ export interface RoomState {
   pausedAt: number | null;
   /** Cuándo puede mover el bot que está en turno. null si no juega un bot. */
   botReadyAt: number | null;
+  /**
+   * Hasta cuándo la baza recién ganada se queda en la mesa. Nadie puede jugar
+   * antes de eso, así todos llegan a ver la última carta y quién se la llevó.
+   */
+  trickPauseUntil: number | null;
   history: RoundHistory[];
   winnerId: string | null;
   log: string[];

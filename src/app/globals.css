@@ -126,13 +126,123 @@ body {
   animation: beat 0.5s ease-in-out infinite;
 }
 
+/* --- Emotes / stickers --------------------------------------------------- */
+
+/* Aparición: sale desde abajo con un rebote y se va desvaneciendo. */
+@keyframes emote-pop {
+  0% {
+    opacity: 0;
+    transform: translateY(10px) scale(0.4);
+  }
+  15% {
+    opacity: 1;
+    transform: translateY(-4px) scale(1.15);
+  }
+  28% {
+    transform: translateY(0) scale(1);
+  }
+  82% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-14px) scale(0.9);
+  }
+}
+
+.emote-pop {
+  animation: emote-pop 3s ease-out forwards;
+}
+
+/* El cuerpo del emote se sacude, como riéndose. */
+@keyframes emote-giggle {
+  0%,
+  100% {
+    transform: rotate(-5deg) translateY(0);
+  }
+  25% {
+    transform: rotate(4deg) translateY(-2px);
+  }
+  50% {
+    transform: rotate(-4deg) translateY(0);
+  }
+  75% {
+    transform: rotate(5deg) translateY(-2px);
+  }
+}
+
+.emote-giggle {
+  animation: emote-giggle 0.45s ease-in-out infinite;
+  transform-origin: center bottom;
+}
+
+@keyframes emote-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-3px) rotate(-3deg);
+  }
+  40% {
+    transform: translateX(3px) rotate(3deg);
+  }
+  60% {
+    transform: translateX(-2px) rotate(-2deg);
+  }
+  80% {
+    transform: translateX(2px) rotate(2deg);
+  }
+}
+
+.emote-shake {
+  animation: emote-shake 0.3s linear infinite;
+}
+
+@keyframes emote-wave {
+  0%,
+  100% {
+    transform: rotate(-18deg);
+  }
+  50% {
+    transform: rotate(22deg);
+  }
+}
+
+.emote-wave {
+  animation: emote-wave 0.5s ease-in-out infinite;
+  transform-origin: 60% 90%;
+}
+
+@keyframes emote-bob {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-3px) scale(1.06);
+  }
+}
+
+.emote-bob {
+  animation: emote-bob 0.7s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .turn-flash,
   .urgent-vignette,
   .card-glow,
   .beat,
   .beat-fast,
-  .turn-ring {
+  .turn-ring,
+  .emote-giggle,
+  .emote-shake,
+  .emote-wave,
+  .emote-bob {
     animation: none;
+  }
+  .emote-pop {
+    animation: emote-pop 3s ease-out forwards;
   }
 }

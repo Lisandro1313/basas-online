@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import { PlayingCard } from './PlayingCard';
 import { PauseOverlay } from './PauseOverlay';
 import { RoundTable } from './RoundTable';
+import { StickerBar } from './StickerBar';
+import { useReactions } from '@/lib/client/useReactions';
 import { SUIT_NAME, valueLabel } from '@/lib/game/cards';
 import {
   sndBid,
@@ -146,6 +148,9 @@ export function GameTable({ state, youId, busy, act }: Props) {
     lastTickSecond.current = secs;
   }, [remaining, you?.isYourTurn]);
 
+  /* --- Reacciones (stickers) --------------------------------------------- */
+  const reactions = useReactions(state, offset.current);
+
   /* --- Qué se ve en la mesa ---------------------------------------------- */
   const onTable = reveal ? reveal.cards : state.trick;
   const seconds = Math.ceil(remaining / 1000);
@@ -246,7 +251,15 @@ export function GameTable({ state, youId, busy, act }: Props) {
       )}
 
       {/* Mesa con los jugadores alrededor */}
-      <RoundTable state={state} youId={youId} onTable={onTable} reveal={reveal} />
+      <RoundTable
+        state={state}
+        youId={youId}
+        onTable={onTable}
+        reveal={reveal}
+        reactions={reactions}
+      />
+
+      <StickerBar busy={busy} act={act} />
 
       {reveal && state.phase === 'roundEnd' && (
         <p className="text-center text-sm text-white/60">Última de la ronda · va la tabla…</p>
@@ -320,19 +333,30 @@ export function GameTable({ state, youId, busy, act }: Props) {
                 <>Juega {turnPlayer?.name}…</>
               ))}
           </p>
-          <div className="flex flex-wrap justify-center gap-1.5">
+          {/* Las cartas se reparten el ancho: con muchas se achican para entrar
+              en una fila, sin desbordar el teléfono; en pantalla grande topan
+              en un tamaño cómodo. El contenedor es la referencia de cqmin. */}
+          <div
+            className="mx-auto flex justify-center gap-[1.5%]"
+            style={{ maxWidth: `${Math.min(you.hand.length, 8) * 4.6}rem` }}
+          >
             {you.hand.map((card) => {
               const playable =
                 state.phase === 'playing' && you.isYourTurn && you.playableIds.includes(card.id);
               return (
-                <PlayingCard
+                <div
                   key={card.id}
-                  card={card}
-                  size="lg"
-                  disabled={!playable}
-                  glow={playable}
-                  onClick={playable ? () => void act({ type: 'play', cardId: card.id }) : undefined}
-                />
+                  className="min-w-0 flex-1"
+                  style={{ maxWidth: '4.4rem', containerType: 'inline-size' }}
+                >
+                  <PlayingCard
+                    card={card}
+                    fluid
+                    disabled={!playable}
+                    glow={playable}
+                    onClick={playable ? () => void act({ type: 'play', cardId: card.id }) : undefined}
+                  />
+                </div>
               );
             })}
           </div>

@@ -83,9 +83,23 @@ export interface RoomState {
   history: RoundHistory[];
   winnerId: string | null;
   log: string[];
+  /** Stickers recientes tirados en la mesa. Efímeros: el cliente los deja de
+   *  mostrar solos por tiempo. Se guardan pocos para no engordar el estado. */
+  reactions: Reaction[];
+  reactionSeq: number;
   /** Secreto por jugador. Nunca sale del servidor: se borra al redactar. */
   tokens: Record<string, string>;
 }
+
+export interface Reaction {
+  seq: number;
+  playerId: string;
+  sticker: string;
+  at: number;
+}
+
+/** Cuántos stickers recientes se conservan. */
+export const MAX_REACTIONS = 12;
 
 export const MIN_PLAYERS = 2;
 export const MAX_PLAYERS = 8;

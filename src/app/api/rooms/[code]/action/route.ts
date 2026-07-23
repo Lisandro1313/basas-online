@@ -13,6 +13,7 @@ import {
   refreshTimers,
   removePlayer,
   resumeGame,
+  sendReaction,
   setAvatar,
   startGame,
 } from '@/lib/game/engine';
@@ -100,6 +101,11 @@ export async function POST(
 
         case 'avatar':
           setAvatar(draft, playerId, body.avatar ?? null);
+          break;
+
+        case 'react':
+          if (typeof body.sticker !== 'string') throw new RuleError('Falta el sticker.');
+          sendReaction(draft, playerId, body.sticker);
           break;
 
         case 'leave':

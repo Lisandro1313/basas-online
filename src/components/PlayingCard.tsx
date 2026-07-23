@@ -12,6 +12,8 @@ const SIZES = {
 interface Props {
   card: Card;
   size?: keyof typeof SIZES;
+  /** Ocupa el ancho del contenedor (para escalar con container queries). */
+  fluid?: boolean;
   disabled?: boolean;
   selected?: boolean;
   /** Resalta la carta como jugable ahora mismo. */
@@ -19,9 +21,17 @@ interface Props {
   onClick?: () => void;
 }
 
-export function PlayingCard({ card, size = 'md', disabled, selected, glow, onClick }: Props) {
+export function PlayingCard({ card, size = 'md', fluid, disabled, selected, glow, onClick }: Props) {
   const red = card.suit === 'hearts' || card.suit === 'diamonds';
   const interactive = Boolean(onClick) && !disabled;
+
+  // En modo fluido la carta llena el ancho del contenedor; el texto (en em) y
+  // la relación de aspecto la siguen. El font-size va en cqmin para escalar.
+  // El font va en cqw: 26% del ancho de la carta (su contenedor inline-size),
+  // así todo lo interno (medido en em) escala con la carta.
+  const fluidStyle = fluid
+    ? { width: '100%', aspectRatio: '5 / 7', height: 'auto', fontSize: 'clamp(9px, 26cqw, 20px)' }
+    : undefined;
 
   return (
     <button
@@ -29,8 +39,9 @@ export function PlayingCard({ card, size = 'md', disabled, selected, glow, onCli
       onClick={onClick}
       disabled={!interactive}
       aria-label={`${valueLabel(card.value)} de ${card.suit}`}
+      style={fluidStyle}
       className={[
-        SIZES[size],
+        fluid ? '' : SIZES[size],
         'deal-in relative flex flex-col items-center justify-center rounded-md border bg-linear-to-b from-white to-slate-100 font-bold shadow-lg transition',
         red ? 'text-rose-600' : 'text-slate-900',
         selected ? 'border-amber-400 ring-2 ring-amber-400' : 'border-slate-400/60',

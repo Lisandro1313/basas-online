@@ -9,7 +9,8 @@ import {
   SUIT_NAME,
   valueLabel,
 } from './cards';
-import { AVATAR_EMOJIS, MAX_AVATAR_CHARS, MAX_PLAYERS, MIN_PLAYERS } from './types';
+import { AVATAR_EMOJIS, MAX_AVATAR_CHARS, MAX_PLAYERS, MAX_REACTIONS, MIN_PLAYERS } from './types';
+import { isValidSticker } from './stickers';
 import type { Card, Player, RoomState, RoundResult, Suit } from './types';
 
 /** Error de regla: el API lo traduce a un 400 con mensaje para el usuario. */
@@ -109,6 +110,8 @@ export function createRoom(code: string, hostName: string, hostId: string, token
     history: [],
     winnerId: null,
     log: [],
+    reactions: [],
+    reactionSeq: 0,
     tokens: {},
   };
   addPlayer(state, hostId, hostName, token);
@@ -134,6 +137,23 @@ export function addPlayer(state: RoomState, id: string, name: string, token: str
   });
   state.tokens[id] = token;
   log(state, `${clean} entró a la sala.`);
+}
+
+/** Tira un sticker a la mesa. Anti-spam: uno cada 700 ms por jugador. */
+export function sendReaction(state: RoomState, playerId: string, sticker: string) {
+  const player = state.players.find((p) => p.id === playerId);
+  if (!player) throw new RuleError('No estás en esta sala.');
+  if (!isValidSticker(sticker)) throw new RuleError('Ese sticker no existe.');
+
+  const now = Date.now();
+  const ultima = [...state.reactions].reverse().find((r) => r.playerId === playerId);
+  if (ultima && now - ultima.at < 700) return; // repetición muy rápida: se ignora
+
+  state.reactionSeq += 1;
+  state.reactions.push({ seq: state.reactionSeq, playerId, sticker, at: now });
+  if (state.reactions.length > MAX_REACTIONS) {
+    state.reactions = state.reactions.slice(-MAX_REACTIONS);
+  }
 }
 
 /** Cambia el avatar: un emoji de la lista o una foto ya reducida por el cliente. */

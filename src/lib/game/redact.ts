@@ -42,6 +42,7 @@ export interface PublicState {
   history: RoundHistory[];
   winnerId: string | null;
   log: string[];
+  reactions: { seq: number; playerId: string; sticker: string; at: number }[];
   /** Todo lo que sigue es específico del jugador que pide el estado. */
   you: {
     id: string;
@@ -59,6 +60,7 @@ export interface PublicState {
 export function redact(state: RoomState, viewerId: string | null): PublicState {
   const viewer = viewerId ? state.players.find((p) => p.id === viewerId) : undefined;
   const isPlaying = state.phase === 'playing';
+  const now = Date.now();
 
   return {
     code: state.code,
@@ -95,6 +97,8 @@ export function redact(state: RoomState, viewerId: string | null): PublicState {
     history: state.history,
     winnerId: state.winnerId,
     log: state.log.slice(-12),
+    // Solo las de los últimos segundos: las viejas no le sirven a nadie.
+    reactions: state.reactions.filter((r) => now - r.at < 6000),
     you: viewer
       ? {
           id: viewer.id,

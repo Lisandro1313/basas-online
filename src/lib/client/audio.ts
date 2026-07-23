@@ -320,38 +320,41 @@ function blip(freq: number, when: number, dur: number, gain: number, type: Oscil
   return osc;
 }
 
+// Los stickers suenan un 30% más fuerte que el resto de los efectos.
+const STK = 1.3;
+
 /** Reproduce el sonido de un sticker. Los nombres coinciden con Sticker.sound. */
 export function playStickerSound(sound: string | null) {
   if (!sound || !prefEnabled('sfx')) return;
   switch (sound) {
     case 'laugh': // "ja ja ja" en escalón descendente
-      [660, 590, 520, 460].forEach((f, i) => blip(f, i * 0.11, 0.1, 0.11, 'triangle'));
+      [660, 590, 520, 460].forEach((f, i) => blip(f, i * 0.11, 0.1, 0.11 * STK, 'triangle'));
       break;
     case 'aww':
-      blip(520, 0, 0.5, 0.1, 'sine');
-      blip(392, 0.12, 0.5, 0.09, 'sine');
+      blip(520, 0, 0.5, 0.1 * STK, 'sine');
+      blip(392, 0.12, 0.5, 0.09 * STK, 'sine');
       break;
     case 'angry':
-      noise({ duration: 0.35, from: 300, to: 90, type: 'lowpass', q: 2, gain: 0.35 });
-      blip(120, 0, 0.35, 0.12, 'sawtooth');
+      noise({ duration: 0.35, from: 300, to: 90, type: 'lowpass', q: 2, gain: 0.35 * STK });
+      blip(120, 0, 0.35, 0.12 * STK, 'sawtooth');
       break;
     case 'wow':
-      blip(440, 0, 0.4, 0.12, 'sine')?.frequency.exponentialRampToValueAtTime(
+      blip(440, 0, 0.4, 0.12 * STK, 'sine')?.frequency.exponentialRampToValueAtTime(
         880,
         (ctx?.currentTime ?? 0) + 0.4
       );
       break;
     case 'clap':
       for (let i = 0; i < 4; i++) {
-        noise({ when: i * 0.13, duration: 0.06, from: 3500, to: 1200, q: 1.5, gain: 0.3 });
+        noise({ when: i * 0.13, duration: 0.06, from: 3500, to: 1200, q: 1.5, gain: 0.3 * STK });
       }
       break;
     case 'wave':
-      blip(784, 0, 0.15, 0.1, 'sine');
-      blip(988, 0.1, 0.2, 0.09, 'sine');
+      blip(784, 0, 0.15, 0.1 * STK, 'sine');
+      blip(988, 0.1, 0.2, 0.09 * STK, 'sine');
       break;
     case 'boo':
-      blip(200, 0, 0.6, 0.13, 'sawtooth')?.frequency.exponentialRampToValueAtTime(
+      blip(200, 0, 0.6, 0.13 * STK, 'sawtooth')?.frequency.exponentialRampToValueAtTime(
         90,
         (ctx?.currentTime ?? 0) + 0.6
       );

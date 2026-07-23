@@ -156,7 +156,7 @@ export function RoundTable({ state, youId, onTable, reveal, reactions }: Props) 
                 className="emote-pop pointer-events-none absolute z-30"
                 style={{ top: 'calc(-1 * clamp(28px, 11cqmin, 52px))' }}
               >
-                <AnimatedEmote id={reaction.sticker} size={48} />
+                <AnimatedEmote id={reaction.sticker} size={48} muted={false} />
               </div>
             )}
 

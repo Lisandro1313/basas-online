@@ -1,13 +1,26 @@
 'use client';
 
 import { getSticker } from '@/lib/game/stickers';
+import { prefEnabled } from '@/lib/client/audio';
 
 /**
  * Dibuja un sticker: emoji suelto, carita animada original (SVG), o un clip de
- * video propio dejado en /public/emotes/<id>.mp4. Todo dentro de un círculo.
+ * video propio (Cloudinary o /public/emotes/<id>.mp4). Todo dentro de un círculo.
+ *
+ * `muted`: en la vista previa del panel va muteado (no molesta con sonido); la
+ * burbuja que aparece sobre el asiento lo deja sonar, y así lo escuchan todos.
+ * El sonido del video igual respeta el interruptor de efectos.
  */
-export function AnimatedEmote({ id, size = 56 }: { id: string; size?: number }) {
-  // Emote de video propio: `url:https://res.cloudinary.com/...`
+export function AnimatedEmote({
+  id,
+  size = 56,
+  muted = true,
+}: {
+  id: string;
+  size?: number;
+  muted?: boolean;
+}) {
+  // Emote de video propio: `url:https://res.cloudinary.com/...` o `/emotes/x.mp4`
   if (id.startsWith('url:')) {
     return (
       <span
@@ -19,6 +32,7 @@ export function AnimatedEmote({ id, size = 56 }: { id: string; size?: number }) 
           autoPlay
           loop
           playsInline
+          muted={muted || !prefEnabled('sfx')}
           className="h-full w-full object-cover"
         />
       </span>
@@ -50,7 +64,7 @@ export function AnimatedEmote({ id, size = 56 }: { id: string; size?: number }) 
           src={`/emotes/${id}.mp4`}
           autoPlay
           loop
-          muted
+          muted={muted || !prefEnabled('sfx')}
           playsInline
           className="h-full w-full object-cover"
         />

@@ -13,6 +13,11 @@ export interface Player {
   id: string;
   name: string;
   isBot: boolean;
+  /**
+   * Avatar: o `emoji:🦊`, o una foto como data URL ya reducida en el navegador.
+   * null = se muestra la inicial del nombre.
+   */
+  avatar: string | null;
   hand: Card[];
   /** null = todavía no apostó. Ojo: 0 es una apuesta válida. */
   bid: number | null;
@@ -49,6 +54,8 @@ export interface RoomState {
   totalRounds: number;
   round: number;
   cardsThisRound: number;
+  /** Cuántas cartas toca en cada ronda. Se sortea al empezar la partida. */
+  roundCards: number[];
   dealerIndex: number;
   turnIndex: number;
   trumpCard: Card | null;
@@ -66,6 +73,8 @@ export interface RoomState {
   turnDeadline: number | null;
   /** Momento (epoch ms) en que el anfitrión pausó. null si el juego corre. */
   pausedAt: number | null;
+  /** Cuándo puede mover el bot que está en turno. null si no juega un bot. */
+  botReadyAt: number | null;
   history: RoundHistory[];
   winnerId: string | null;
   log: string[];
@@ -74,4 +83,13 @@ export interface RoomState {
 }
 
 export const MIN_PLAYERS = 2;
-export const MAX_PLAYERS = 6;
+export const MAX_PLAYERS = 8;
+
+/**
+ * Tope del data URL de la foto. El estado entero de la sala se guarda en un
+ * documento de Firestore, que no puede pasar de 1 MB: con 8 jugadores hay que
+ * dejar margen. El navegador reduce la foto bastante por debajo de esto.
+ */
+export const MAX_AVATAR_CHARS = 40_000;
+
+export const AVATAR_EMOJIS = ['🦊', '🐺', '🦉', '🐸', '🐼', '🦁', '🐯', '🐵', '🦈', '🐙', '🦖', '🐝'];

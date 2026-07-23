@@ -68,25 +68,32 @@ export function sortHand(hand: Card[]): Card[] {
 }
 
 /**
- * Solo hay una obligación: seguir el palo de salida si tenés cartas de ese palo.
- * No hay obligación de matar con triunfo.
+ * Obligaciones al jugar, en orden:
+ *   1. Si tenés el palo de salida, tenés que servirlo.
+ *   2. Si no lo tenés pero tenés triunfo, estás obligado a tirar triunfo.
+ *   3. Si no tenés ninguno de los dos, tirás lo que quieras.
  */
 export function isPlayable(
   card: Card,
   hand: Card[],
-  leadSuit: Suit | null
+  leadSuit: Suit | null,
+  trumpSuit: Suit | null
 ): boolean {
   if (!leadSuit) return true;
-  const hasLead = hand.some((c) => c.suit === leadSuit);
-  if (!hasLead) return true;
-  return card.suit === leadSuit;
+
+  if (hand.some((c) => c.suit === leadSuit)) return card.suit === leadSuit;
+
+  if (trumpSuit && hand.some((c) => c.suit === trumpSuit)) return card.suit === trumpSuit;
+
+  return true;
 }
 
 export function playableCards(
   hand: Card[],
-  leadSuit: Suit | null
+  leadSuit: Suit | null,
+  trumpSuit: Suit | null
 ): Card[] {
-  return hand.filter((c) => isPlayable(c, hand, leadSuit));
+  return hand.filter((c) => isPlayable(c, hand, leadSuit, trumpSuit));
 }
 
 /** Gana el triunfo más alto; si no se jugó triunfo, la más alta del palo de salida. */

@@ -1,6 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import { Avatar } from './Avatar';
+import { AvatarPicker } from './AvatarPicker';
 import type { PublicState } from '@/lib/game/redact';
 import { MAX_PLAYERS, MIN_PLAYERS } from '@/lib/game/types';
 
@@ -8,7 +10,7 @@ interface Props {
   state: PublicState;
   youId: string;
   busy: boolean;
-  act: (payload: Record<string, unknown>) => Promise<void>;
+  act: (payload: Record<string, unknown>, opts?: { silent?: boolean }) => Promise<void>;
 }
 
 export function Lobby({ state, youId, busy, act }: Props) {
@@ -16,6 +18,7 @@ export function Lobby({ state, youId, busy, act }: Props) {
   const [copied, setCopied] = useState(false);
   const isHost = state.hostId === youId;
   const canStart = state.players.length >= MIN_PLAYERS;
+  const you = state.players.find((p) => p.id === youId);
 
   const share = async () => {
     const url = `${window.location.origin}/sala/${state.code}`;
@@ -43,6 +46,8 @@ export function Lobby({ state, youId, busy, act }: Props) {
         </button>
       </div>
 
+      {you && <AvatarPicker name={you.name} avatar={you.avatar} busy={busy} act={act} />}
+
       <div className="rounded-2xl border border-white/15 bg-black/30 p-5">
         <h2 className="mb-3 font-bold">
           Jugadores ({state.players.length}/{MAX_PLAYERS})
@@ -51,9 +56,10 @@ export function Lobby({ state, youId, busy, act }: Props) {
           {state.players.map((p) => (
             <li
               key={p.id}
-              className="flex items-center justify-between rounded-lg bg-white/10 px-3 py-2"
+              className="flex items-center gap-3 rounded-lg bg-white/10 px-3 py-2"
             >
-              <span className="font-medium">
+              <Avatar name={p.name} avatar={p.avatar} size={32} />
+              <span className="flex-1 font-medium">
                 {p.name}
                 {p.id === youId && <span className="text-amber-300"> (vos)</span>}
                 {p.isBot && <span className="text-white/50"> · bot</span>}

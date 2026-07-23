@@ -7,6 +7,7 @@ export interface PublicPlayer {
   id: string;
   name: string;
   isBot: boolean;
+  avatar: string | null;
   handCount: number;
   bid: number | null;
   tricks: number;
@@ -31,6 +32,9 @@ export interface PublicState {
   turnDeadline: number | null;
   pausedAt: number | null;
   pauseSeconds: number;
+  botReadyAt: number | null;
+  /** Cuántas cartas toca en cada ronda, sorteado al empezar. */
+  roundCards: number[];
   /** Reloj del servidor al responder: el cliente corrige su propio desfasaje. */
   serverNow: number;
   turnSeconds: number;
@@ -63,6 +67,7 @@ export function redact(state: RoomState, viewerId: string | null): PublicState {
       id: p.id,
       name: p.name,
       isBot: p.isBot,
+      avatar: p.avatar,
       handCount: p.hand.length,
       bid: p.bid,
       tricks: p.tricks,
@@ -81,6 +86,8 @@ export function redact(state: RoomState, viewerId: string | null): PublicState {
     turnDeadline: state.turnDeadline,
     pausedAt: state.pausedAt,
     pauseSeconds: PAUSE_SECONDS,
+    botReadyAt: state.botReadyAt,
+    roundCards: state.roundCards,
     serverNow: Date.now(),
     turnSeconds: TURN_SECONDS,
     history: state.history,
@@ -91,7 +98,7 @@ export function redact(state: RoomState, viewerId: string | null): PublicState {
           id: viewer.id,
           hand: viewer.hand,
           playableIds: isPlaying
-            ? playableCards(viewer.hand, state.leadSuit).map((c) => c.id)
+            ? playableCards(viewer.hand, state.leadSuit, state.trumpSuit).map((c) => c.id)
             : [],
           isYourTurn: state.players[state.turnIndex]?.id === viewer.id,
           forbiddenBid:

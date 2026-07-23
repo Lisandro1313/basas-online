@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { PlayingCard } from './PlayingCard';
-import { PlayerSeat } from './PlayerSeat';
 import { PauseOverlay } from './PauseOverlay';
+import { RoundTable } from './RoundTable';
 import { SUIT_NAME, valueLabel } from '@/lib/game/cards';
 import {
   sndBid,
@@ -84,6 +84,16 @@ export function GameTable({ state, youId, busy, act }: Props) {
     const id = setTimeout(() => void act({ type: 'timeout' }, { silent: true }), Math.max(0, wait));
     return () => clearTimeout(id);
   }, [state.turnDeadline, state.phase, myIndex, act]);
+
+  // Los bots ya no juegan de golpe dentro del request: tienen su propio reloj y
+  // el cliente les avisa cuando les toca, igual que con el turno vencido.
+  useEffect(() => {
+    if (!state.botReadyAt) return;
+    const wait =
+      state.botReadyAt - (Date.now() + offset.current) + 150 + Math.max(0, myIndex) * 400;
+    const id = setTimeout(() => void act({ type: 'botMove' }, { silent: true }), Math.max(0, wait));
+    return () => clearTimeout(id);
+  }, [state.botReadyAt, myIndex, act]);
 
   /* --- Sonidos ------------------------------------------------------------ */
   const prevCards = useRef(state.trick.length);
@@ -226,49 +236,12 @@ export function GameTable({ state, youId, busy, act }: Props) {
         </div>
       )}
 
-      {/* Jugadores */}
-      <div className="flex flex-wrap justify-center gap-2">
-        {state.players.map((p, i) => (
-          <PlayerSeat
-            key={p.id}
-            player={p}
-            isTurn={i === state.turnIndex && state.phase !== 'roundEnd'}
-            isDealer={i === state.dealerIndex}
-            isYou={p.id === youId}
-            phase={state.phase}
-          />
-        ))}
-      </div>
+      {/* Mesa con los jugadores alrededor */}
+      <RoundTable state={state} youId={youId} onTable={onTable} reveal={reveal} />
 
-      {/* Mesa */}
-      <div className="flex min-h-40 flex-col items-center justify-center gap-3 rounded-2xl border border-white/10 bg-black/20 p-4">
-        {onTable.length === 0 ? (
-          <p className="text-white/40">
-            {state.phase === 'bidding' ? 'Fase de apuestas…' : `Juega ${turnPlayer?.name ?? ''}…`}
-          </p>
-        ) : (
-          <>
-            <div className={`flex flex-wrap justify-center gap-3 ${reveal ? 'opacity-90' : ''}`}>
-              {onTable.map((p) => (
-                <div key={p.card.id} className="flex flex-col items-center gap-1">
-                  <PlayingCard card={p.card} size="md" />
-                  <span className="text-[11px] text-white/70">{nameOf(p.playerId)}</span>
-                </div>
-              ))}
-            </div>
-            {reveal && (
-              <p className="text-sm font-semibold text-emerald-300">
-                {nameOf(reveal.winnerId)} se llevó la baza
-                {state.phase === 'roundEnd' && (
-                  <span className="block text-white/50">
-                    Última de la ronda · va la tabla…
-                  </span>
-                )}
-              </p>
-            )}
-          </>
-        )}
-      </div>
+      {reveal && state.phase === 'roundEnd' && (
+        <p className="text-center text-sm text-white/60">Última de la ronda · va la tabla…</p>
+      )}
 
       {/* Panel de apuesta */}
       {state.phase === 'bidding' && you && (

@@ -20,3 +20,8 @@ tsconfig.tsbuildinfo
 # Claves de servicio de Firebase. NUNCA subir esto a git.
 *firebase-adminsdk*.json
 serviceAccountKey.json
+
+# Videos y capturas de referencia
+*.mp4
+*.mov
+*.webm

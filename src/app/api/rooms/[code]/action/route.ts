@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import {
   RuleError,
   addBot,
+  applyBotMove,
   applyTimeout,
   nextRound,
   pauseExpired,
@@ -9,10 +10,10 @@ import {
   placeBid,
   playAgain,
   playCard,
-  refreshDeadline,
+  refreshTimers,
   removePlayer,
   resumeGame,
-  runBots,
+  setAvatar,
   startGame,
 } from '@/lib/game/engine';
 import { assertToken, mutateRoom } from '@/lib/rooms';
@@ -78,6 +79,11 @@ export async function POST(
           applyTimeout(draft);
           break;
 
+        case 'botMove':
+          // Igual que el timeout: el cliente avisa, el servidor revalida el reloj.
+          applyBotMove(draft);
+          break;
+
         case 'pause':
           if (!isHost) throw new RuleError('Solo el anfitrión puede pausar.');
           pauseGame(draft);
@@ -92,6 +98,10 @@ export async function POST(
           resumeGame(draft, !isHost);
           break;
 
+        case 'avatar':
+          setAvatar(draft, playerId, body.avatar ?? null);
+          break;
+
         case 'leave':
           removePlayer(draft, playerId);
           break;
@@ -100,9 +110,7 @@ export async function POST(
           throw new RuleError('Acción desconocida.');
       }
 
-      // Los bots resuelven sus turnos acá mismo, antes de publicar el estado.
-      runBots(draft);
-      refreshDeadline(draft);
+      refreshTimers(draft);
     });
 
     return NextResponse.json({ state: redact(state, playerId) });

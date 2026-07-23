@@ -9,13 +9,13 @@ import {
   SUIT_NAME,
   valueLabel,
 } from './cards';
-import { MAX_PLAYERS, MIN_PLAYERS } from './types';
+import { AVATAR_EMOJIS, MAX_AVATAR_CHARS, MAX_PLAYERS, MIN_PLAYERS } from './types';
 import type { Card, Player, RoomState, RoundResult, Suit } from './types';
 
 /** Error de regla: el API lo traduce a un 400 con mensaje para el usuario. */
 export class RuleError extends Error {}
 
-const BOT_NAMES = ['Beto', 'Carla', 'Dani', 'Elsa', 'Fito'];
+const BOT_NAMES = ['Beto', 'Carla', 'Dani', 'Elsa', 'Fito', 'Gaby', 'Hugo'];
 
 /** Segundos que tiene cada jugador para mover antes de que juegue solo. */
 export const TURN_SECONDS = 30;
@@ -26,6 +26,9 @@ export const TURN_SECONDS = 30;
  */
 export const PAUSE_SECONDS = 180;
 
+/** Lo que "piensa" un bot antes de mover, para que se pueda seguir la mano. */
+export const BOT_DELAY_SECONDS = 2;
+
 function log(state: RoomState, message: string) {
   state.log.push(message);
   if (state.log.length > 40) state.log = state.log.slice(-40);
@@ -35,13 +38,43 @@ function playerName(state: RoomState, id: string): string {
   return state.players.find((p) => p.id === id)?.name ?? '???';
 }
 
+/** Tope duro: una mano más grande no entra en la pantalla de un celular. */
+const HAND_CAP = 10;
+
 /**
- * Cartas por ronda: arranca en 5 y sube de a una hasta 10, pero nunca más de
- * las que permite el mazo (dejando una para el triunfo cuando se puede).
+ * Máximo de cartas por jugador según cuántos sean. El mazo tiene 52, pero una
+ * se da vuelta como triunfo, así que se reparten 51 como mucho.
+ *
+ * Con 7 jugadores dan 7 cartas cada uno (49 + triunfo); con 8, solo 6, porque
+ * 7 × 8 = 56 no entra en el mazo.
  */
-export function cardsForRound(round: number, playerCount: number): number {
-  const byDeck = Math.floor(52 / playerCount);
-  return Math.max(1, Math.min(10, 5 + round - 1, byDeck));
+export function maxCardsPerRound(playerCount: number): number {
+  return Math.max(1, Math.min(HAND_CAP, Math.floor(51 / playerCount)));
+}
+
+/**
+ * Sortea cuántas cartas toca en cada ronda: valores al azar entre 1 y el máximo
+ * que permite la mesa, sin repetir. Si hay más rondas que valores posibles
+ * (pasa con muchos jugadores), se vuelve a barajar la bolsa y se sigue,
+ * evitando que dos rondas seguidas caigan iguales.
+ */
+export function buildRoundPlan(rounds: number, playerCount: number): number[] {
+  const max = maxCardsPerRound(playerCount);
+  const plan: number[] = [];
+  let pool: number[] = [];
+
+  while (plan.length < rounds) {
+    if (pool.length === 0) {
+      pool = shuffle(Array.from({ length: max }, (_, i) => i + 1));
+      // Si al rebarajar toca el mismo número que la ronda anterior, lo corremos.
+      if (pool.length > 1 && plan.length > 0 && pool[pool.length - 1] === plan[plan.length - 1]) {
+        [pool[0], pool[pool.length - 1]] = [pool[pool.length - 1], pool[0]];
+      }
+    }
+    plan.push(pool.pop()!);
+  }
+
+  return plan;
 }
 
 export function createRoom(code: string, hostName: string, hostId: string, token: string): RoomState {
@@ -53,6 +86,7 @@ export function createRoom(code: string, hostName: string, hostId: string, token
     totalRounds: 8,
     round: 0,
     cardsThisRound: 0,
+    roundCards: [],
     dealerIndex: 0,
     turnIndex: 0,
     trumpCard: null,
@@ -63,6 +97,7 @@ export function createRoom(code: string, hostName: string, hostId: string, token
     trickSeq: 0,
     turnDeadline: null,
     pausedAt: null,
+    botReadyAt: null,
     history: [],
     winnerId: null,
     log: [],
@@ -79,9 +114,40 @@ export function addPlayer(state: RoomState, id: string, name: string, token: str
   if (state.players.some((p) => p.name.toLowerCase() === clean.toLowerCase())) {
     throw new RuleError('Ya hay alguien con ese nombre en la sala.');
   }
-  state.players.push({ id, name: clean, isBot: false, hand: [], bid: null, tricks: 0, points: 0 });
+  state.players.push({
+    id,
+    name: clean,
+    isBot: false,
+    avatar: null,
+    hand: [],
+    bid: null,
+    tricks: 0,
+    points: 0,
+  });
   state.tokens[id] = token;
   log(state, `${clean} entró a la sala.`);
+}
+
+/** Cambia el avatar: un emoji de la lista o una foto ya reducida por el cliente. */
+export function setAvatar(state: RoomState, playerId: string, avatar: string | null) {
+  const player = state.players.find((p) => p.id === playerId);
+  if (!player) throw new RuleError('No estás en esta sala.');
+
+  if (avatar === null) {
+    player.avatar = null;
+    return;
+  }
+
+  if (avatar.startsWith('emoji:')) {
+    const emoji = avatar.slice(6);
+    if (!AVATAR_EMOJIS.includes(emoji)) throw new RuleError('Ese avatar no existe.');
+    player.avatar = avatar;
+    return;
+  }
+
+  if (!avatar.startsWith('data:image/')) throw new RuleError('Formato de imagen inválido.');
+  if (avatar.length > MAX_AVATAR_CHARS) throw new RuleError('La foto es muy pesada.');
+  player.avatar = avatar;
 }
 
 export function addBot(state: RoomState) {
@@ -93,6 +159,7 @@ export function addBot(state: RoomState) {
     id: `bot-${Math.random().toString(36).slice(2, 8)}`,
     name,
     isBot: true,
+    avatar: `emoji:${AVATAR_EMOJIS[state.players.length % AVATAR_EMOJIS.length]}`,
     hand: [],
     bid: null,
     tricks: 0,
@@ -120,6 +187,7 @@ export function startGame(state: RoomState, totalRounds: number) {
     throw new RuleError(`Hacen falta al menos ${MIN_PLAYERS} jugadores.`);
   }
   state.totalRounds = Math.max(1, Math.min(20, Math.floor(totalRounds)));
+  state.roundCards = buildRoundPlan(state.totalRounds, state.players.length);
   state.round = 0;
   state.dealerIndex = state.players.length - 1;
   state.players = state.players.map((p) => ({ ...p, points: 0 }));
@@ -140,7 +208,7 @@ export function startRound(state: RoomState) {
   }
 
   const count = state.players.length;
-  const perPlayer = cardsForRound(nextRound, count);
+  const perPlayer = state.roundCards[nextRound - 1] ?? maxCardsPerRound(count);
   const { hands, rest } = deal(shuffle(createDeck()), count, perPlayer);
   const trumpCard = rest[0] ?? null;
 
@@ -221,8 +289,13 @@ export function playCard(state: RoomState, playerId: string, cardId: string) {
   if (index === -1) throw new RuleError('No tenés esa carta.');
   const card = player.hand[index];
 
-  if (!isPlayable(card, player.hand, state.leadSuit)) {
-    throw new RuleError('Tenés que servir el palo de salida.');
+  if (!isPlayable(card, player.hand, state.leadSuit, state.trumpSuit)) {
+    const tieneSalida = player.hand.some((c) => c.suit === state.leadSuit);
+    throw new RuleError(
+      tieneSalida
+        ? 'Tenés que servir el palo de salida.'
+        : 'No tenés el palo de salida: estás obligado a tirar triunfo.'
+    );
   }
 
   player.hand.splice(index, 1);
@@ -290,10 +363,53 @@ export function nextRound(state: RoomState) {
  * Reinicia el reloj del turno. Se llama después de cada acción, así el plazo
  * lo fija siempre el servidor y todos los clientes ven la misma cuenta atrás.
  */
-export function refreshDeadline(state: RoomState) {
+/**
+ * Reinicia los relojes según quién está en turno. Se llama después de cada
+ * acción, así los plazos los fija siempre el servidor.
+ *
+ * A un bot no se le corre el reloj de turno: se le da uno propio de un par de
+ * segundos para que la mano se pueda seguir con la vista.
+ */
+export function refreshTimers(state: RoomState) {
   const activo =
     (state.phase === 'bidding' || state.phase === 'playing') && state.pausedAt === null;
-  state.turnDeadline = activo ? Date.now() + TURN_SECONDS * 1000 : null;
+
+  if (!activo) {
+    state.turnDeadline = null;
+    state.botReadyAt = null;
+    return;
+  }
+
+  if (state.players[state.turnIndex]?.isBot) {
+    state.turnDeadline = null;
+    state.botReadyAt = Date.now() + BOT_DELAY_SECONDS * 1000;
+  } else {
+    state.turnDeadline = Date.now() + TURN_SECONDS * 1000;
+    state.botReadyAt = null;
+  }
+}
+
+/**
+ * Mueve el bot que está en turno, una sola jugada. Lo dispara cualquier cliente
+ * cuando ve que se cumplió su tiempo, y el servidor revalida el reloj.
+ */
+export function applyBotMove(state: RoomState) {
+  if (state.pausedAt !== null) throw new RuleError('El juego está pausado.');
+  if (state.phase !== 'bidding' && state.phase !== 'playing') {
+    throw new RuleError('No hay ningún turno activo.');
+  }
+
+  const player = state.players[state.turnIndex];
+  if (!player?.isBot) throw new RuleError('No es el turno de un bot.');
+  if (state.botReadyAt === null || Date.now() < state.botReadyAt) {
+    throw new RuleError('El bot todavía está pensando.');
+  }
+
+  if (state.phase === 'bidding') {
+    placeBid(state, player.id, botBid(state, player));
+  } else {
+    playCard(state, player.id, botCard(state, player).id);
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -392,7 +508,7 @@ function botBid(state: RoomState, player: Player): number {
 }
 
 function botCard(state: RoomState, player: Player): Card {
-  const options = playableCards(player.hand, state.leadSuit);
+  const options = playableCards(player.hand, state.leadSuit, state.trumpSuit);
   const needsMore = player.tricks < (player.bid ?? 0);
   const byValue = [...options].sort((a, b) => a.value - b.value);
 
@@ -417,9 +533,11 @@ function botCard(state: RoomState, player: Player): Card {
 }
 
 /**
- * Aplica los turnos de los bots hasta que le toque a un humano.
- * Corre en el servidor después de cada acción, así el estado que se publica
- * ya está al día.
+ * Resuelve todos los turnos de bots de corrido, sin esperas.
+ *
+ * En el juego real no se usa: ahí cada bot mueve con su propio reloj (ver
+ * `applyBotMove`), si no las manos pasan demasiado rápido para seguirlas.
+ * Queda para simular partidas enteras en los tests.
  */
 export function runBots(state: RoomState) {
   if (state.pausedAt !== null) return; // en pausa no juega nadie, ni los bots

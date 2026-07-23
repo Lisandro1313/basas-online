@@ -4,11 +4,14 @@ import {
   addBot,
   applyTimeout,
   nextRound,
+  pauseExpired,
+  pauseGame,
   placeBid,
   playAgain,
   playCard,
   refreshDeadline,
   removePlayer,
+  resumeGame,
   runBots,
   startGame,
 } from '@/lib/game/engine';
@@ -73,6 +76,20 @@ export async function POST(
         case 'timeout':
           // Cualquiera puede avisar que venció el turno; el servidor lo verifica.
           applyTimeout(draft);
+          break;
+
+        case 'pause':
+          if (!isHost) throw new RuleError('Solo el anfitrión puede pausar.');
+          pauseGame(draft);
+          break;
+
+        case 'resume':
+          // El anfitrión reanuda cuando quiere. Pasados los 3 minutos puede
+          // hacerlo cualquiera, así una pausa olvidada no congela la partida.
+          if (!isHost && !pauseExpired(draft)) {
+            throw new RuleError('Solo el anfitrión puede reanudar.');
+          }
+          resumeGame(draft, !isHost);
           break;
 
         case 'leave':

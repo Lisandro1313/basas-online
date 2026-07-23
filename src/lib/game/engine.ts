@@ -20,6 +20,12 @@ const BOT_NAMES = ['Beto', 'Carla', 'Dani', 'Elsa', 'Fito'];
 /** Segundos que tiene cada jugador para mover antes de que juegue solo. */
 export const TURN_SECONDS = 30;
 
+/**
+ * Cuánto puede durar una pausa antes de que el juego siga solo. Si el anfitrión
+ * se va sin reanudar, la partida no queda congelada para siempre.
+ */
+export const PAUSE_SECONDS = 180;
+
 function log(state: RoomState, message: string) {
   state.log.push(message);
   if (state.log.length > 40) state.log = state.log.slice(-40);
@@ -56,6 +62,7 @@ export function createRoom(code: string, hostName: string, hostId: string, token
     lastTrick: null,
     trickSeq: 0,
     turnDeadline: null,
+    pausedAt: null,
     history: [],
     winnerId: null,
     log: [],
@@ -179,6 +186,7 @@ export function forbiddenBid(state: RoomState): number | null {
 }
 
 export function placeBid(state: RoomState, playerId: string, bid: number) {
+  if (state.pausedAt !== null) throw new RuleError('El juego está pausado.');
   if (state.phase !== 'bidding') throw new RuleError('No es momento de apostar.');
   const player = state.players[state.turnIndex];
   if (!player || player.id !== playerId) throw new RuleError('No es tu turno.');
@@ -204,6 +212,7 @@ export function placeBid(state: RoomState, playerId: string, bid: number) {
 }
 
 export function playCard(state: RoomState, playerId: string, cardId: string) {
+  if (state.pausedAt !== null) throw new RuleError('El juego está pausado.');
   if (state.phase !== 'playing') throw new RuleError('No es momento de jugar cartas.');
   const player = state.players[state.turnIndex];
   if (!player || player.id !== playerId) throw new RuleError('No es tu turno.');
@@ -282,8 +291,36 @@ export function nextRound(state: RoomState) {
  * lo fija siempre el servidor y todos los clientes ven la misma cuenta atrás.
  */
 export function refreshDeadline(state: RoomState) {
-  const activo = state.phase === 'bidding' || state.phase === 'playing';
+  const activo =
+    (state.phase === 'bidding' || state.phase === 'playing') && state.pausedAt === null;
   state.turnDeadline = activo ? Date.now() + TURN_SECONDS * 1000 : null;
+}
+
+/* ------------------------------------------------------------------ */
+/* Pausa                                                               */
+/* ------------------------------------------------------------------ */
+
+export function pauseGame(state: RoomState) {
+  if (state.phase !== 'bidding' && state.phase !== 'playing') {
+    throw new RuleError('Solo se puede pausar con la mano en juego.');
+  }
+  if (state.pausedAt !== null) throw new RuleError('El juego ya está pausado.');
+
+  state.pausedAt = Date.now();
+  state.turnDeadline = null; // el reloj del turno se congela
+  log(state, 'El anfitrión pausó el juego.');
+}
+
+/** ¿Ya pasó el tiempo máximo de pausa? Entonces cualquiera puede reanudar. */
+export function pauseExpired(state: RoomState): boolean {
+  return state.pausedAt !== null && Date.now() - state.pausedAt >= PAUSE_SECONDS * 1000;
+}
+
+export function resumeGame(state: RoomState, automatico = false) {
+  if (state.pausedAt === null) throw new RuleError('El juego no está pausado.');
+  state.pausedAt = null;
+  // Al volver arranca un turno completo: nadie pierde tiempo por la pausa.
+  log(state, automatico ? 'Se reanudó solo tras la pausa.' : 'El anfitrión reanudó el juego.');
 }
 
 /**
@@ -292,6 +329,7 @@ export function refreshDeadline(state: RoomState) {
  * reloj: nadie puede apurarle el turno a otro.
  */
 export function applyTimeout(state: RoomState) {
+  if (state.pausedAt !== null) throw new RuleError('El juego está pausado.');
   if (state.phase !== 'bidding' && state.phase !== 'playing') {
     throw new RuleError('No hay ningún turno activo.');
   }
@@ -314,6 +352,7 @@ export function playAgain(state: RoomState) {
   if (state.phase !== 'gameOver') throw new RuleError('La partida sigue en curso.');
   state.phase = 'lobby';
   state.turnDeadline = null;
+  state.pausedAt = null;
   state.round = 0;
   state.winnerId = null;
   state.history = [];
@@ -383,6 +422,7 @@ function botCard(state: RoomState, player: Player): Card {
  * ya está al día.
  */
 export function runBots(state: RoomState) {
+  if (state.pausedAt !== null) return; // en pausa no juega nadie, ni los bots
   for (let guard = 0; guard < 200; guard++) {
     if (state.phase !== 'bidding' && state.phase !== 'playing') return;
     const player = state.players[state.turnIndex];

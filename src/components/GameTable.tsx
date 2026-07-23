@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { PlayingCard } from './PlayingCard';
 import { PlayerSeat } from './PlayerSeat';
+import { PauseOverlay } from './PauseOverlay';
 import { SUIT_NAME, valueLabel } from '@/lib/game/cards';
 import {
   sndBid,
@@ -158,6 +159,16 @@ export function GameTable({ state, youId, busy, act }: Props) {
           Ronda <b>{state.round}</b>/{state.totalRounds} · {state.cardsThisRound} cartas
         </span>
         <span className="flex items-center gap-2">
+          {state.hostId === youId && (
+            <button
+              onClick={() => void act({ type: 'pause' })}
+              disabled={busy}
+              title="Pausar el juego"
+              className="rounded-lg bg-white/15 px-2 py-1 text-xs font-semibold hover:bg-white/25 disabled:opacity-40"
+            >
+              ⏸ Pausa
+            </button>
+          )}
           <span className="text-white/60">Triunfo:</span>
           {state.trumpCard ? (
             <>
@@ -171,6 +182,10 @@ export function GameTable({ state, youId, busy, act }: Props) {
           )}
         </span>
       </div>
+
+      {state.pausedAt !== null && (
+        <PauseOverlay state={state} youId={youId} busy={busy} act={act} />
+      )}
 
       {/* Reloj del turno */}
       {state.turnDeadline && (

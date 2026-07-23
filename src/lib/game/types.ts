@@ -64,6 +64,8 @@ export interface RoomState {
   trickSeq: number;
   /** Momento (epoch ms) en que vence el turno actual. null si no hay turno. */
   turnDeadline: number | null;
+  /** Momento (epoch ms) en que el anfitrión pausó. null si el juego corre. */
+  pausedAt: number | null;
   history: RoundHistory[];
   winnerId: string | null;
   log: string[];

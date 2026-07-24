@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import Link from 'next/link';
+import { SupportButton } from './SupportButton';
 import { sndFanfare } from '@/lib/client/audio';
 import type { PublicState } from '@/lib/game/redact';
 
@@ -61,6 +62,10 @@ export function GameOver({ state, youId, busy, act }: Props) {
             Otra partida
           </button>
         )}
+      </div>
+
+      <div className="flex justify-center">
+        <SupportButton />
       </div>
     </div>
   );

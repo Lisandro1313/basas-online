@@ -75,7 +75,7 @@ export default function Home() {
           href="/salas"
           className="flex w-full items-center justify-center gap-2 rounded-xl bg-white/15 px-4 py-3 font-semibold hover:bg-white/25"
         >
-          🎲 Ver salas
+          Ver salas
         </Link>
 
         <div className="flex items-center gap-3 text-xs text-white/40">

@@ -51,10 +51,22 @@ export function ChatPanel({ state, youId, act }: Props) {
     if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
   }, [lastSeq, open]);
 
+  // Avisar "escribiendo…" como mucho una vez cada 2,5s mientras se teclea.
+  const lastTyping = useRef(0);
+  const onType = (value: string) => {
+    setText(value);
+    const now = Date.now();
+    if (value && now - lastTyping.current > 2500) {
+      lastTyping.current = now;
+      void act({ type: 'typing' }, { silent: true });
+    }
+  };
+
   const send = async () => {
     const value = text.trim();
     if (!value) return;
     setText('');
+    lastTyping.current = 0;
     await act({ type: 'chat', kind: 'text', text: value }, { silent: true });
   };
 
@@ -104,7 +116,7 @@ export function ChatPanel({ state, youId, act }: Props) {
                     </a>
                   ) : (
                     <p
-                      className={`mt-0.5 inline-block rounded-lg px-2 py-1 text-sm break-words ${
+                      className={`mt-0.5 inline-block rounded-lg px-2 py-1 text-sm wrap-break-word ${
                         mine ? 'bg-amber-400/20 text-amber-50' : 'bg-white/10'
                       }`}
                     >
@@ -115,6 +127,14 @@ export function ChatPanel({ state, youId, act }: Props) {
               </div>
             );
           })
+        )}
+
+        {state.typing.length > 0 && (
+          <p className="px-1 text-xs text-white/40 italic">
+            {state.typing.length === 1
+              ? `${state.typing[0]} está escribiendo…`
+              : `${state.typing.slice(0, 2).join(', ')} están escribiendo…`}
+          </p>
         )}
       </div>
 
@@ -141,7 +161,7 @@ export function ChatPanel({ state, youId, act }: Props) {
         <input
           value={text}
           maxLength={MAX_MESSAGE_CHARS}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => onType(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault();

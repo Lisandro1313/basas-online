@@ -150,6 +150,7 @@ export function createRoom(code: string, hostName: string, hostId: string, token
     reactionSeq: 0,
     messages: [],
     messageSeq: 0,
+    typing: {},
     tokens: {},
   };
   addPlayer(state, hostId, hostName, token);
@@ -297,6 +298,16 @@ export function sendChat(
   if (state.messages.length > MAX_MESSAGES) {
     state.messages = state.messages.slice(-MAX_MESSAGES);
   }
+  // Ya mandó: deja de estar "escribiendo".
+  if (state.typing) delete state.typing[playerId];
+}
+
+/** Marca que el jugador está escribiendo (por unos segundos). */
+export function setTyping(state: RoomState, playerId: string) {
+  const player = findParticipant(state, playerId);
+  if (!player) return;
+  state.typing = state.typing ?? {};
+  state.typing[playerId] = Date.now() + 4000;
 }
 
 /** Registra un emote de video propio (URL de Cloudinary) en el jugador. */

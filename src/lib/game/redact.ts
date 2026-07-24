@@ -47,6 +47,8 @@ export interface PublicState {
   log: string[];
   reactions: { seq: number; playerId: string; sticker: string; at: number }[];
   messages: ChatMessage[];
+  /** Nombres de quienes están escribiendo ahora (sin incluirte a vos). */
+  typing: string[];
   /** Entraron con la partida en curso; juegan desde la mano siguiente. */
   pending: { id: string; name: string; avatar: string | null }[];
   /** Todo lo que sigue es específico del jugador que pide el estado. */
@@ -63,6 +65,14 @@ export interface PublicState {
  * Convierte el estado completo del servidor en la vista que puede recibir un
  * jugador: sin tokens y sin las manos ajenas. Esto es lo único que sale por la red.
  */
+/** Nombre de un participante (sentado o esperando) por id. */
+function nameFor(state: RoomState, id: string): string | undefined {
+  return (
+    state.players.find((p) => p.id === id)?.name ??
+    (state.pending ?? []).find((p) => p.id === id)?.name
+  );
+}
+
 export function redact(state: RoomState, viewerId: string | null): PublicState {
   const viewer = viewerId ? state.players.find((p) => p.id === viewerId) : undefined;
   const isPlaying = state.phase === 'playing';
@@ -109,6 +119,10 @@ export function redact(state: RoomState, viewerId: string | null): PublicState {
     // Solo las de los últimos segundos: las viejas no le sirven a nadie.
     reactions: state.reactions.filter((r) => now - r.at < 6000),
     messages: state.messages ?? [],
+    typing: Object.entries(state.typing ?? {})
+      .filter(([id, until]) => id !== viewerId && until > now)
+      .map(([id]) => nameFor(state, id))
+      .filter((n): n is string => Boolean(n)),
     pending: (state.pending ?? []).map((p) => ({
       id: p.id,
       name: p.name,

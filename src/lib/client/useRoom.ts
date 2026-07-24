@@ -30,6 +30,7 @@ export function useRoom(code: string, session: Session | null): RoomHook {
   const [connected, setConnected] = useState(true);
   const [busy, setBusy] = useState(false);
   const versionRef = useRef(0);
+  const failuresRef = useRef(0);
   const sessionRef = useRef(session);
   sessionRef.current = session;
 
@@ -49,9 +50,11 @@ export function useRoom(code: string, session: Session | null): RoomHook {
       }
       versionRef.current = data.version;
       setState(data.state);
+      failuresRef.current = 0;
       setConnected(true); // una lectura buena = estamos conectados
     } catch {
       // Sin cartel rojo: el indicador de "reconectando…" ya lo comunica.
+      failuresRef.current += 1;
       setConnected(false);
     }
   }, [code]);
@@ -116,10 +119,28 @@ export function useRoom(code: string, session: Session | null): RoomHook {
     };
   }, [code, refresh]);
 
-  // Respaldo: si el listener anda consultamos poco; si no, más seguido.
+  // Respaldo y reconexión. Con el listener consultamos poco; sin él, más seguido;
+  // y si la red se cae, con reintento exponencial (1,2,4,8→15s) para no martillar
+  // ni gastar datos al pedo, volviendo al ritmo normal apenas se recupera.
   useEffect(() => {
-    const interval = setInterval(() => void refresh(), live ? 10000 : 2500);
-    return () => clearInterval(interval);
+    let stop = false;
+    let timer: ReturnType<typeof setTimeout>;
+
+    const schedule = () => {
+      const fails = failuresRef.current;
+      const delay =
+        fails > 0 ? Math.min(15000, 1000 * 2 ** (fails - 1)) : live ? 10000 : 2500;
+      timer = setTimeout(async () => {
+        await refresh();
+        if (!stop) schedule();
+      }, delay);
+    };
+
+    schedule();
+    return () => {
+      stop = true;
+      clearTimeout(timer);
+    };
   }, [refresh, live]);
 
   return {

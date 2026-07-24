@@ -101,6 +101,8 @@ export interface RoomState {
   /** Chat de la sala. Persiste durante la partida, acotado a los últimos N. */
   messages: ChatMessage[];
   messageSeq: number;
+  /** Quién está escribiendo: id → hasta cuándo (epoch ms). Efímero. */
+  typing: Record<string, number>;
   /** Secreto por jugador. Nunca sale del servidor: se borra al redactar. */
   tokens: Record<string, string>;
 }

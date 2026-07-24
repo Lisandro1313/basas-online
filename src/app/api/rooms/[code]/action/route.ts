@@ -18,6 +18,7 @@ import {
   sendReaction,
   setAvatar,
   setRoomName,
+  setTyping,
   setVisibility,
   startGame,
 } from '@/lib/game/engine';
@@ -126,6 +127,10 @@ export async function POST(
         case 'addEmote':
           if (typeof body.url !== 'string') throw new RuleError('Falta el video.');
           addEmote(draft, playerId, body.url);
+          break;
+
+        case 'typing':
+          setTyping(draft, playerId);
           break;
 
         case 'chat': {

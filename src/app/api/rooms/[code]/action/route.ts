@@ -17,6 +17,7 @@ import {
   sendChat,
   sendReaction,
   setAvatar,
+  setRoomName,
   startGame,
 } from '@/lib/game/engine';
 import { assertToken, mutateRoom } from '@/lib/rooms';
@@ -99,6 +100,12 @@ export async function POST(
             throw new RuleError('Solo el anfitrión puede reanudar.');
           }
           resumeGame(draft, !isHost);
+          break;
+
+        case 'rename':
+          if (!isHost) throw new RuleError('Solo el anfitrión puede renombrar la sala.');
+          if (typeof body.name !== 'string') throw new RuleError('Falta el nombre.');
+          setRoomName(draft, body.name);
           break;
 
         case 'avatar':

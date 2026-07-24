@@ -17,6 +17,7 @@ export interface PublicPlayer {
 
 export interface PublicState {
   code: string;
+  name: string;
   hostId: string;
   phase: Phase;
   players: PublicPlayer[];
@@ -45,6 +46,8 @@ export interface PublicState {
   log: string[];
   reactions: { seq: number; playerId: string; sticker: string; at: number }[];
   messages: ChatMessage[];
+  /** Entraron con la partida en curso; juegan desde la mano siguiente. */
+  pending: { id: string; name: string; avatar: string | null }[];
   /** Todo lo que sigue es específico del jugador que pide el estado. */
   you: {
     id: string;
@@ -66,6 +69,7 @@ export function redact(state: RoomState, viewerId: string | null): PublicState {
 
   return {
     code: state.code,
+    name: state.name ?? `Sala ${state.code}`,
     hostId: state.hostId,
     phase: state.phase,
     players: state.players.map((p) => ({
@@ -103,6 +107,11 @@ export function redact(state: RoomState, viewerId: string | null): PublicState {
     // Solo las de los últimos segundos: las viejas no le sirven a nadie.
     reactions: state.reactions.filter((r) => now - r.at < 6000),
     messages: state.messages ?? [],
+    pending: (state.pending ?? []).map((p) => ({
+      id: p.id,
+      name: p.name,
+      avatar: p.avatar,
+    })),
     you: viewer
       ? {
           id: viewer.id,

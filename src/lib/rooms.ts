@@ -32,6 +32,29 @@ interface RoomDoc {
   state: string;
   version: number;
   updatedAt: number;
+  /**
+   * Campos "asomados" fuera del JSON para poder listar las salas. El estado
+   * completo va serializado y no se puede consultar por dentro.
+   */
+  name?: string;
+  phase?: string;
+  playerCount?: number;
+  playerNames?: string[];
+  round?: number;
+  totalRounds?: number;
+}
+
+/** Datos de la sala que se pueden listar sin exponer nada sensible. */
+function summary(state: RoomState) {
+  const players = [...state.players, ...(state.pending ?? [])];
+  return {
+    name: state.name ?? `Sala ${state.code}`,
+    phase: state.phase,
+    playerCount: players.length,
+    playerNames: players.map((p) => p.name).slice(0, 8),
+    round: state.round,
+    totalRounds: state.totalRounds,
+  };
 }
 
 const roomRef = (code: string) => adminDb().collection('rooms').doc(code.toUpperCase());
@@ -53,7 +76,12 @@ export async function insertRoom(state: RoomState): Promise<void> {
   const created = await adminDb().runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     if (snap.exists) return false; // colisión de código, muy poco probable
-    tx.set(ref, { state: JSON.stringify(state), version: 1, updatedAt: now } satisfies RoomDoc);
+    tx.set(ref, {
+      state: JSON.stringify(state),
+      version: 1,
+      updatedAt: now,
+      ...summary(state),
+    } satisfies RoomDoc);
     tx.set(pulseRef(state.code), { version: 1, updatedAt: now });
     return true;
   });
@@ -83,11 +111,63 @@ export async function mutateRoom(
 
     const version = doc.version + 1;
     const updatedAt = Date.now();
-    tx.set(ref, { state: JSON.stringify(draft), version, updatedAt } satisfies RoomDoc);
+    tx.set(ref, {
+      state: JSON.stringify(draft),
+      version,
+      updatedAt,
+      ...summary(draft),
+    } satisfies RoomDoc);
     tx.set(pulse, { version, updatedAt });
 
     return draft;
   });
+}
+
+export interface RoomSummary {
+  code: string;
+  name: string;
+  phase: string;
+  playerCount: number;
+  playerNames: string[];
+  round: number;
+  totalRounds: number;
+  updatedAt: number;
+}
+
+/** Salas sin actividad por más de esto no se listan (evita mesas fantasma). */
+export const ROOM_IDLE_MS = 30 * 60 * 1000;
+
+/**
+ * Lista las salas con actividad reciente, ordenadas por lo más nuevo.
+ * Usa los campos asomados del documento, así no hace falta abrir cada estado.
+ */
+export async function listRooms(limit = 30): Promise<RoomSummary[]> {
+  const db = adminDb();
+  const since = Date.now() - ROOM_IDLE_MS;
+
+  const snap = await db
+    .collection('rooms')
+    .where('updatedAt', '>=', since)
+    .orderBy('updatedAt', 'desc')
+    .limit(limit)
+    .get();
+
+  return snap.docs
+    .map((d) => {
+      const doc = d.data() as RoomDoc;
+      return {
+        code: d.id,
+        name: doc.name ?? `Sala ${d.id}`,
+        phase: doc.phase ?? 'lobby',
+        playerCount: doc.playerCount ?? 0,
+        playerNames: doc.playerNames ?? [],
+        round: doc.round ?? 0,
+        totalRounds: doc.totalRounds ?? 0,
+        updatedAt: doc.updatedAt ?? 0,
+      };
+    })
+    // Las partidas terminadas y las vacías no aportan nada en la lista.
+    .filter((r) => r.phase !== 'gameOver' && r.playerCount > 0);
 }
 
 export function assertToken(state: RoomState, playerId: string, token: string) {

@@ -111,9 +111,11 @@ export function isLastRound(state: RoomState): boolean {
 export function createRoom(code: string, hostName: string, hostId: string, token: string): RoomState {
   const state: RoomState = {
     code,
+    name: `Mesa de ${hostName.trim().slice(0, 16) || 'alguien'}`,
     hostId,
     phase: 'lobby',
     players: [],
+    pending: [],
     totalRounds: 8,
     round: 0,
     cardsThisRound: 0,
@@ -143,14 +145,23 @@ export function createRoom(code: string, hostName: string, hostId: string, token
   return state;
 }
 
+/**
+ * Suma un jugador. En el lobby entra directo a la mesa; con la partida en curso
+ * queda en espera y se incorpora al arrancar la mano siguiente (no se puede
+ * repartir en una mano ya empezada).
+ */
 export function addPlayer(state: RoomState, id: string, name: string, token: string) {
-  if (state.phase !== 'lobby') throw new RuleError('La partida ya arrancó.');
-  if (state.players.length >= MAX_PLAYERS) throw new RuleError('La sala está llena.');
+  const pending = state.pending ?? (state.pending = []);
+  const total = state.players.length + pending.length;
+  if (total >= MAX_PLAYERS) throw new RuleError('La sala está llena.');
+
   const clean = name.trim().slice(0, 16) || 'Jugador';
-  if (state.players.some((p) => p.name.toLowerCase() === clean.toLowerCase())) {
-    throw new RuleError('Ya hay alguien con ese nombre en la sala.');
-  }
-  state.players.push({
+  const taken = [...state.players, ...pending].some(
+    (p) => p.name.toLowerCase() === clean.toLowerCase()
+  );
+  if (taken) throw new RuleError('Ya hay alguien con ese nombre en la sala.');
+
+  const player: Player = {
     id,
     name: clean,
     isBot: false,
@@ -160,9 +171,52 @@ export function addPlayer(state: RoomState, id: string, name: string, token: str
     bid: null,
     tricks: 0,
     points: 0,
-  });
+  };
+
   state.tokens[id] = token;
-  log(state, `${clean} entró a la sala.`);
+
+  if (state.phase === 'lobby') {
+    state.players.push(player);
+    log(state, `${clean} entró a la sala.`);
+  } else {
+    pending.push(player);
+    log(state, `${clean} entró: juega desde la próxima mano.`);
+  }
+}
+
+/**
+ * Incorpora a los que estaban esperando. Entran con el puntaje del que menos
+ * tiene, para que no arranquen en desventaja, y se rehace el plan de las manos
+ * que faltan: con más jugadores entran menos cartas por mano.
+ */
+function mergePending(state: RoomState, fromRound: number) {
+  const pending = state.pending ?? [];
+  if (pending.length === 0) return;
+
+  const minPoints = state.players.length
+    ? Math.min(...state.players.map((p) => p.points))
+    : 0;
+
+  for (const p of pending) {
+    p.points = minPoints;
+    state.players.push(p);
+    log(state, `${p.name} se suma a la mesa con ${minPoints} pts.`);
+  }
+  state.pending = [];
+
+  // El máximo de cartas por mano depende de cuántos son: rehacemos lo que falta.
+  const remaining = state.totalRounds - fromRound + 1;
+  if (remaining > 0) {
+    const fresh = buildRoundPlan(remaining, state.players.length);
+    state.roundCards = [...state.roundCards.slice(0, fromRound - 1), ...fresh];
+  }
+}
+
+/** El anfitrión le pone nombre a la sala (lo que se ve en la lista). */
+export function setRoomName(state: RoomState, name: string) {
+  const clean = name.replace(/\p{Cc}/gu, ' ').trim().slice(0, 30);
+  if (!clean) throw new RuleError('Poné un nombre para la sala.');
+  state.name = clean;
 }
 
 /** Solo se aceptan videos servidos por Cloudinary, para no cargar URLs random. */
@@ -331,6 +385,10 @@ export function startGame(state: RoomState, totalRounds: number) {
 
 export function startRound(state: RoomState) {
   const nextRound = state.round + 1;
+
+  // Los que entraron con la mano en curso se suman recién ahora, y el plan de
+  // las manos que faltan se rehace para la nueva cantidad de jugadores.
+  mergePending(state, nextRound);
 
   if (nextRound > state.totalRounds) {
     const best = [...state.players].sort((a, b) => b.points - a.points)[0];
@@ -624,6 +682,9 @@ export function playAgain(state: RoomState) {
   state.lastTrick = null;
   state.trumpCard = null;
   state.trumpSuit = null;
+  // Los que esperaban entran ya, que arranca de cero para todos.
+  state.players = [...state.players, ...(state.pending ?? [])];
+  state.pending = [];
   state.players = state.players.map((p) => ({
     ...p,
     hand: [],

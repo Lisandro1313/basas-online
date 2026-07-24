@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { lastName, rememberName, saveSession } from '@/lib/client/session';
 
@@ -69,6 +70,13 @@ export default function Home() {
         >
           {busy ? 'Creando…' : 'Crear sala'}
         </button>
+
+        <Link
+          href="/salas"
+          className="flex w-full items-center justify-center gap-2 rounded-xl bg-white/15 px-4 py-3 font-semibold hover:bg-white/25"
+        >
+          🎲 Ver salas
+        </Link>
 
         <div className="flex items-center gap-3 text-xs text-white/40">
           <span className="h-px flex-1 bg-white/15" />o<span className="h-px flex-1 bg-white/15" />

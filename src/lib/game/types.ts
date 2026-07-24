@@ -50,9 +50,16 @@ export interface RoundHistory {
 
 export interface RoomState {
   code: string;
+  /** Nombre visible en la lista de salas. */
+  name: string;
   hostId: string;
   phase: Phase;
   players: Player[];
+  /**
+   * Los que entraron con la partida en curso. No se puede repartir en una mano
+   * ya empezada, así que esperan acá y se suman al arrancar la mano siguiente.
+   */
+  pending: Player[];
   totalRounds: number;
   round: number;
   cardsThisRound: number;

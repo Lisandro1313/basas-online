@@ -34,6 +34,17 @@ export function Lobby({ state, youId, busy, act }: Props) {
   return (
     <div className="mx-auto w-full max-w-lg space-y-6 p-4">
       <div className="rounded-2xl border border-white/15 bg-black/30 p-6 text-center">
+        {isHost ? (
+          <input
+            value={state.name}
+            maxLength={30}
+            onChange={(e) => void act({ type: 'rename', name: e.target.value }, { silent: true })}
+            title="Nombre de la sala (lo ven en la lista)"
+            className="mb-2 w-full rounded-lg border border-white/15 bg-black/40 px-3 py-1.5 text-center font-semibold outline-none focus:border-amber-400"
+          />
+        ) : (
+          <p className="mb-2 font-semibold">{state.name}</p>
+        )}
         <p className="text-sm text-white/60">Código de la sala</p>
         <p className="my-2 font-mono text-5xl font-black tracking-[0.2em] text-amber-300">
           {state.code}

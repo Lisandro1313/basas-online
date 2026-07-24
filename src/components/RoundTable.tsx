@@ -63,7 +63,7 @@ export function RoundTable({ state, youId, onTable, reveal, reactions }: Props) 
       {/* Triunfo, fijo pegado a la izquierda del paño */}
       {state.trumpCard ? (
         <div
-          className="absolute top-1/2 left-[26%] z-10 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-0.5"
+          className="absolute top-[34%] left-1/2 z-10 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-0.5"
           style={{ containerType: 'inline-size', width: trumpW }}
         >
           <span className="font-semibold text-white/70" style={{ fontSize: tinySize }}>
@@ -79,7 +79,7 @@ export function RoundTable({ state, youId, onTable, reveal, reactions }: Props) 
       ) : (
         state.phase !== 'lobby' && (
           <div
-            className="absolute top-1/2 left-[26%] z-10 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-0.5 text-center"
+            className="absolute top-[34%] left-1/2 z-10 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-0.5 text-center"
             style={{ width: trumpW }}
           >
             <span className="font-semibold text-white/70" style={{ fontSize: tinySize }}>
@@ -92,17 +92,31 @@ export function RoundTable({ state, youId, onTable, reveal, reactions }: Props) 
         )
       )}
 
-      {/* Cartas jugadas, en fila centrada en el paño */}
-      <div
-        className="absolute top-[41%] left-1/2 z-10 flex -translate-x-1/2 -translate-y-1/2 items-end justify-center"
-        style={{ gap: '2%', maxWidth: '62%' }}
-      >
-        {onTable.length === 0 ? (
-          <span className="text-white/30" style={{ fontSize: tinySize }}>
-            {state.phase === 'bidding' ? 'Apostando…' : 'Esperando…'}
+      {/* Mensaje central: qué se llevó la baza, o el estado de la mano */}
+      <div className="pointer-events-none absolute top-1/2 left-1/2 z-20 -translate-x-1/2 -translate-y-1/2 text-center">
+        {winnerName && onTable.length > 0 ? (
+          <span
+            className="rounded-full bg-black/75 px-2.5 py-1 font-bold text-emerald-300 shadow-lg"
+            style={{ fontSize: nameSize }}
+          >
+            {winnerName} se la llevó
           </span>
         ) : (
-          onTable.map((played) => (
+          onTable.length === 0 && (
+            <span className="text-white/30" style={{ fontSize: tinySize }}>
+              {state.phase === 'bidding' ? 'Apostando…' : 'Esperando…'}
+            </span>
+          )
+        )}
+      </div>
+
+      {/* Cartas jugadas, en fila abajo del centro del paño */}
+      {onTable.length > 0 && (
+        <div
+          className="absolute top-[65%] left-1/2 z-10 flex -translate-x-1/2 -translate-y-1/2 items-end justify-center"
+          style={{ gap: '2%', maxWidth: '62%' }}
+        >
+          {onTable.map((played) => (
             <div
               key={played.card.id}
               className="flex flex-col items-center gap-0.5"
@@ -118,17 +132,7 @@ export function RoundTable({ state, youId, onTable, reveal, reactions }: Props) 
                 {nameOf(played.playerId)}
               </span>
             </div>
-          ))
-        )}
-      </div>
-
-      {/* Aviso de quién se llevó la baza, centrado y despejado de los asientos */}
-      {winnerName && onTable.length > 0 && (
-        <div
-          className="pointer-events-none absolute top-[63%] left-1/2 z-20 -translate-x-1/2 rounded-full bg-black/75 px-2.5 py-1 font-bold text-emerald-300 shadow-lg"
-          style={{ fontSize: nameSize }}
-        >
-          {winnerName} se la llevó
+          ))}
         </div>
       )}
 

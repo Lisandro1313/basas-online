@@ -5,6 +5,7 @@ import {
   addEmote,
   applyBotMove,
   applyTimeout,
+  kickPlayer,
   nextRound,
   pauseExpired,
   pauseGame,
@@ -113,6 +114,11 @@ export async function POST(
         case 'visibility':
           if (!isHost) throw new RuleError('Solo el anfitrión cambia la visibilidad.');
           setVisibility(draft, Boolean(body.isPublic));
+          break;
+
+        case 'kick':
+          if (typeof body.targetId !== 'string') throw new RuleError('Falta el jugador.');
+          kickPlayer(draft, playerId, body.targetId);
           break;
 
         case 'avatar':

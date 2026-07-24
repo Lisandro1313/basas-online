@@ -117,7 +117,13 @@ export default function Home() {
 
       <footer className="pt-2 text-center">
         <p className="text-xs tracking-wide text-white/35">
-          Hecho por <span className="text-white/55">Lisandro Etcheverry</span>
+          Hecho por{' '}
+          <span
+            className="cursor-help text-white/55"
+            title="Manuel Elena de ReMotos, Dimitrukun y Lut"
+          >
+            Lisandro Etcheverry y asociados
+          </span>
         </p>
       </footer>
     </main>

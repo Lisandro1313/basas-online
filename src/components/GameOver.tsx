@@ -34,10 +34,11 @@ export function GameOver({ state, youId, busy, act }: Props) {
 
       <ol className="space-y-1 rounded-2xl border border-white/15 bg-black/30 p-5">
         {ranking.map((p, i) => (
-          <li key={p.id} className="flex justify-between rounded px-2 py-1.5 odd:bg-white/5">
+          <li key={p.id} className="flex items-center justify-between rounded px-2 py-1.5 odd:bg-white/5">
             <span>
               {['🥇', '🥈', '🥉'][i] ?? `${i + 1}.`} {p.name}
               {p.id === youId && <span className="text-amber-300"> (vos)</span>}
+              {p.wins > 0 && <span className="ml-1 text-xs text-amber-300">🏆{p.wins}</span>}
             </span>
             <b className="text-amber-300">{p.points}</b>
           </li>

@@ -129,8 +129,9 @@ export function GameTable({ state, youId, busy, act }: Props) {
     if (mine && !wasMyTurn.current) {
       sndYourTurn();
       setFlash(true);
-      // En el celular la vibración es lo que más se nota si mirás para otro lado.
-      navigator.vibrate?.(180);
+      // Patrón de vibración (más notorio que un pulso) para cuando el celu está
+      // en silencio o mirás para otro lado.
+      navigator.vibrate?.([140, 70, 140]);
       const id = setTimeout(() => setFlash(false), 1500);
       wasMyTurn.current = mine;
       return () => clearTimeout(id);
@@ -398,6 +399,38 @@ export function GameTable({ state, youId, busy, act }: Props) {
 
       {/* Recorrido de toda la partida */}
       <GameHistory state={state} youId={youId} />
+
+      {/* Administrar jugadores (solo anfitrión): expulsar / sacar bots */}
+      {state.hostId === youId && state.players.length > 1 && (
+        <details className="rounded-xl border border-white/10 bg-slate-950/60 px-4 py-2 text-sm">
+          <summary className="cursor-pointer text-white/60">Jugadores</summary>
+          <ul className="mt-2 space-y-1">
+            {state.players
+              .filter((p) => p.id !== youId)
+              .map((p) => (
+                <li key={p.id} className="flex items-center justify-between">
+                  <span>
+                    {p.name}
+                    {p.isBot && <span className="text-white/40"> · bot</span>}
+                    {p.kicking && <span className="text-rose-300"> · sale la próxima mano</span>}
+                  </span>
+                  {!p.kicking && (
+                    <button
+                      onClick={() => void act({ type: 'kick', targetId: p.id })}
+                      disabled={busy}
+                      className="rounded px-2 py-0.5 text-xs text-white/50 hover:bg-rose-500/20 hover:text-rose-300"
+                    >
+                      Expulsar
+                    </button>
+                  )}
+                </li>
+              ))}
+          </ul>
+          <p className="mt-2 text-xs text-white/40">
+            En curso, el expulsado se va al arrancar la próxima mano.
+          </p>
+        </details>
+      )}
     </div>
   );
 }

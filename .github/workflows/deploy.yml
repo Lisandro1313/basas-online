@@ -1,0 +1,31 @@
+name: Deploy a Vercel
+
+# El webhook nativo de Vercel a veces no dispara. Este workflow llama a un
+# "Deploy Hook" de Vercel en cada push a main, así el deploy sale siempre.
+#
+# Para activarlo (una sola vez):
+#   1. Vercel > Proyecto basas-online > Settings > Git > Deploy Hooks.
+#   2. Crear uno para la rama `main` y copiar la URL.
+#   3. GitHub > repo > Settings > Secrets and variables > Actions >
+#      New repository secret, nombre VERCEL_DEPLOY_HOOK, pegar la URL.
+#      (o pasármela y lo cargo con `gh secret set`).
+#
+# Sin el secret, el workflow no hace nada (no falla).
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Disparar deploy en Vercel
+        env:
+          HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$HOOK" ]; then
+            echo "Falta el secret VERCEL_DEPLOY_HOOK; no hay nada que disparar."
+            exit 0
+          fi
+          curl -fsS -X POST "$HOOK" > /dev/null && echo "Deploy disparado en Vercel."

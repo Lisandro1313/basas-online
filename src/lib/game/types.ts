@@ -25,6 +25,8 @@ export interface Player {
   bid: number | null;
   tricks: number;
   points: number;
+  /** Partidas ganadas en esta sala (marcador acumulado entre partidas). */
+  wins: number;
 }
 
 export type Phase = 'lobby' | 'bidding' | 'playing' | 'roundEnd' | 'gameOver';
@@ -62,6 +64,8 @@ export interface RoomState {
    * ya empezada, así que esperan acá y se suman al arrancar la mano siguiente.
    */
   pending: Player[];
+  /** Ids marcados para expulsar; se van al arrancar la mano siguiente. */
+  kicking: string[];
   totalRounds: number;
   round: number;
   cardsThisRound: number;

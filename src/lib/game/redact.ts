@@ -13,6 +13,9 @@ export interface PublicPlayer {
   bid: number | null;
   tricks: number;
   points: number;
+  wins: number;
+  /** Marcado para expulsarse en la próxima mano. */
+  kicking: boolean;
 }
 
 export interface PublicState {
@@ -94,6 +97,8 @@ export function redact(state: RoomState, viewerId: string | null): PublicState {
       bid: p.bid,
       tricks: p.tricks,
       points: p.points,
+      wins: p.wins ?? 0,
+      kicking: (state.kicking ?? []).includes(p.id),
     })),
     totalRounds: state.totalRounds,
     round: state.round,

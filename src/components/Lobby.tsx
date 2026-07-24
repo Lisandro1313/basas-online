@@ -98,9 +98,21 @@ export function Lobby({ state, youId, busy, act }: Props) {
                 {p.name}
                 {p.id === youId && <span className="text-amber-300"> (vos)</span>}
                 {p.isBot && <span className="text-white/50"> · bot</span>}
+                {p.wins > 0 && <span className="ml-1 text-amber-300">🏆{p.wins}</span>}
               </span>
-              {p.id === state.hostId && (
+              {p.id === state.hostId ? (
                 <span className="text-xs text-white/60">anfitrión</span>
+              ) : (
+                isHost && (
+                  <button
+                    onClick={() => void act({ type: 'kick', targetId: p.id })}
+                    disabled={busy}
+                    title={p.isBot ? 'Sacar el bot' : 'Expulsar'}
+                    className="rounded px-1.5 py-0.5 text-white/40 hover:bg-rose-500/20 hover:text-rose-300"
+                  >
+                    ✕
+                  </button>
+                )
               )}
             </li>
           ))}

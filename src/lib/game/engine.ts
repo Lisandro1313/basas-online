@@ -127,6 +127,7 @@ export function createRoom(code: string, hostName: string, hostId: string, token
     phase: 'lobby',
     players: [],
     pending: [],
+    kicking: [],
     totalRounds: 8,
     round: 0,
     cardsThisRound: 0,
@@ -183,6 +184,7 @@ export function addPlayer(state: RoomState, id: string, name: string, token: str
     bid: null,
     tricks: 0,
     points: 0,
+    wins: 0,
   };
 
   state.tokens[id] = token;
@@ -197,31 +199,85 @@ export function addPlayer(state: RoomState, id: string, name: string, token: str
 }
 
 /**
- * Incorpora a los que estaban esperando. Entran con el puntaje del que menos
- * tiene, para que no arranquen en desventaja, y se rehace el plan de las manos
- * que faltan: con más jugadores entran menos cartas por mano.
+ * Al arrancar una mano ajusta la mesa: saca a los expulsados, incorpora a los
+ * que esperaban (con el puntaje del que menos tiene, para no arrancar en
+ * desventaja) y rehace el plan de las manos que faltan, porque con otra cantidad
+ * de jugadores cambian las cartas por mano.
  */
-function mergePending(state: RoomState, fromRound: number) {
+function reconcilePlayers(state: RoomState, fromRound: number) {
+  const kicking = state.kicking ?? [];
   const pending = state.pending ?? [];
-  if (pending.length === 0) return;
+  if (kicking.length === 0 && pending.length === 0) return;
 
-  const minPoints = state.players.length
-    ? Math.min(...state.players.map((p) => p.points))
-    : 0;
-
-  for (const p of pending) {
-    p.points = minPoints;
-    state.players.push(p);
-    log(state, `${p.name} se suma a la mesa con ${minPoints} pts.`);
+  // 1. Expulsados
+  if (kicking.length) {
+    for (const id of kicking) {
+      const p = state.players.find((x) => x.id === id);
+      if (p) log(state, `${p.name} fue expulsado de la mesa.`);
+      delete state.tokens[id];
+    }
+    state.players = state.players.filter((p) => !kicking.includes(p.id));
+    state.kicking = [];
+    if (state.dealerIndex >= state.players.length) {
+      state.dealerIndex = Math.max(0, state.players.length - 1);
+    }
   }
-  state.pending = [];
 
-  // El máximo de cartas por mano depende de cuántos son: rehacemos lo que falta.
+  // 2. Los que esperaban
+  if (pending.length) {
+    const minPoints = state.players.length
+      ? Math.min(...state.players.map((p) => p.points))
+      : 0;
+    for (const p of pending) {
+      p.points = minPoints;
+      state.players.push(p);
+      log(state, `${p.name} se suma a la mesa con ${minPoints} pts.`);
+    }
+    state.pending = [];
+  }
+
+  // 3. Rehacer el plan de lo que falta para la nueva cantidad de jugadores.
   const remaining = state.totalRounds - fromRound + 1;
-  if (remaining > 0) {
+  if (remaining > 0 && state.players.length > 0) {
     const fresh = buildRoundPlan(remaining, state.players.length);
     state.roundCards = [...state.roundCards.slice(0, fromRound - 1), ...fresh];
   }
+}
+
+/**
+ * El anfitrión expulsa a un jugador o bot. En el lobby se va al toque; con la
+ * partida en curso se va al arrancar la mano siguiente (no se puede sacar a
+ * alguien de una mano ya repartida sin romper el orden).
+ */
+export function kickPlayer(state: RoomState, hostId: string, targetId: string) {
+  if (state.hostId !== hostId) throw new RuleError('Solo el anfitrión puede expulsar.');
+  if (targetId === hostId) throw new RuleError('No podés expulsarte a vos mismo.');
+
+  // Si sólo estaba esperando, se va sin más.
+  const pending = state.pending ?? [];
+  if (pending.some((p) => p.id === targetId)) {
+    state.pending = pending.filter((p) => p.id !== targetId);
+    delete state.tokens[targetId];
+    return;
+  }
+
+  const target = state.players.find((p) => p.id === targetId);
+  if (!target) throw new RuleError('Ese jugador no está en la mesa.');
+
+  if (state.phase === 'lobby') {
+    removePlayer(state, targetId);
+    return;
+  }
+
+  // En curso: encolar, cuidando que queden al menos MIN_PLAYERS para seguir.
+  const kicking = state.kicking ?? (state.kicking = []);
+  if (kicking.includes(targetId)) return;
+  const quedarian = state.players.length - kicking.length - 1 + (state.pending?.length ?? 0);
+  if (quedarian < MIN_PLAYERS) {
+    throw new RuleError(`Tienen que quedar al menos ${MIN_PLAYERS} jugadores.`);
+  }
+  kicking.push(targetId);
+  log(state, `${target.name} será expulsado en la próxima mano.`);
 }
 
 /** El anfitrión le pone nombre a la sala (lo que se ve en la lista). */
@@ -385,6 +441,7 @@ export function addBot(state: RoomState) {
     bid: null,
     tricks: 0,
     points: 0,
+    wins: 0,
   });
   log(state, `${name} (bot) entró a la sala.`);
 }
@@ -428,14 +485,15 @@ export function startGame(state: RoomState, totalRounds: number) {
 export function startRound(state: RoomState) {
   const nextRound = state.round + 1;
 
-  // Los que entraron con la mano en curso se suman recién ahora, y el plan de
-  // las manos que faltan se rehace para la nueva cantidad de jugadores.
-  mergePending(state, nextRound);
+  // Al empezar la mano ajustamos la mesa: expulsados fuera, los que esperaban
+  // adentro, y el plan de lo que falta rehecho para la nueva cantidad.
+  reconcilePlayers(state, nextRound);
 
   if (nextRound > state.totalRounds) {
     const best = [...state.players].sort((a, b) => b.points - a.points)[0];
     state.phase = 'gameOver';
     state.winnerId = best.id;
+    if (best) best.wins = (best.wins ?? 0) + 1; // marcador acumulado de la sala
     log(state, `Fin del juego. Ganó ${best.name} con ${best.points} puntos.`);
     return;
   }
@@ -727,6 +785,8 @@ export function playAgain(state: RoomState) {
   // Los que esperaban entran ya, que arranca de cero para todos.
   state.players = [...state.players, ...(state.pending ?? [])];
   state.pending = [];
+  state.kicking = [];
+  // Se reinician las bazas y los puntos, pero se conservan las victorias (wins).
   state.players = state.players.map((p) => ({
     ...p,
     hand: [],

@@ -64,6 +64,19 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
     return () => clearTimeout(id);
   }, [room.error, room]);
 
+  // Precargar las fotos de avatar para que no parpadeen al reaparecer.
+  const avatarUrls = (state?.players ?? [])
+    .map((p) => p.avatar)
+    .filter((a): a is string => Boolean(a?.startsWith('http')))
+    .join(',');
+  useEffect(() => {
+    if (!avatarUrls) return;
+    for (const url of avatarUrls.split(',')) {
+      const img = new Image();
+      img.src = url;
+    }
+  }, [avatarUrls]);
+
   // Si el servidor ya no reconoce nuestra identidad, volvemos a pedir el nombre.
   // Cuenta tanto estar sentado como estar esperando la próxima mano.
   const knownPlayer = Boolean(

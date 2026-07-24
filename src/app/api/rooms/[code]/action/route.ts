@@ -14,6 +14,7 @@ import {
   refreshTimers,
   removePlayer,
   resumeGame,
+  sendChat,
   sendReaction,
   setAvatar,
   startGame,
@@ -113,6 +114,14 @@ export async function POST(
           if (typeof body.url !== 'string') throw new RuleError('Falta el video.');
           addEmote(draft, playerId, body.url);
           break;
+
+        case 'chat': {
+          const kind = body.kind === 'image' ? 'image' : 'text';
+          const content = kind === 'image' ? body.url : body.text;
+          if (typeof content !== 'string') throw new RuleError('Falta el mensaje.');
+          sendChat(draft, playerId, kind, content);
+          break;
+        }
 
         case 'leave':
           removePlayer(draft, playerId);

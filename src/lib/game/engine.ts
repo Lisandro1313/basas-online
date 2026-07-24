@@ -13,6 +13,8 @@ import {
   AVATAR_EMOJIS,
   MAX_AVATAR_CHARS,
   MAX_CUSTOM_EMOTES,
+  MAX_MESSAGES,
+  MAX_MESSAGE_CHARS,
   MAX_PLAYERS,
   MAX_REACTIONS,
   MIN_PLAYERS,
@@ -133,6 +135,8 @@ export function createRoom(code: string, hostName: string, hostId: string, token
     log: [],
     reactions: [],
     reactionSeq: 0,
+    messages: [],
+    messageSeq: 0,
     tokens: {},
   };
   addPlayer(state, hostId, hostName, token);
@@ -172,6 +176,56 @@ export function isCloudinaryVideo(url: string): boolean {
     );
   } catch {
     return false;
+  }
+}
+
+/** Igual que el video, pero para imágenes del chat. */
+export function isCloudinaryImage(url: string): boolean {
+  try {
+    const u = new URL(url);
+    return (
+      u.protocol === 'https:' &&
+      u.hostname === 'res.cloudinary.com' &&
+      (/\.(jpe?g|png|gif|webp)$/i.test(u.pathname) || u.pathname.includes('/image/upload/'))
+    );
+  } catch {
+    return false;
+  }
+}
+
+/** Manda un mensaje al chat: texto libre o una imagen (URL de Cloudinary). */
+export function sendChat(
+  state: RoomState,
+  playerId: string,
+  kind: 'text' | 'image',
+  content: string
+) {
+  const player = state.players.find((p) => p.id === playerId);
+  if (!player) throw new RuleError('No estás en esta sala.');
+
+  const now = Date.now();
+  // Anti-flood suave: como mucho un mensaje cada 350 ms por jugador.
+  const last = [...state.messages].reverse().find((m) => m.playerId === playerId);
+  if (last && now - last.at < 350) return;
+
+  state.messageSeq += 1;
+  const base = { seq: state.messageSeq, playerId, name: player.name, at: now };
+
+  if (kind === 'text') {
+    // Sin caracteres de control; largo acotado.
+    const text = content
+      .replace(/\p{Cc}/gu, ' ')
+      .trim()
+      .slice(0, MAX_MESSAGE_CHARS);
+    if (!text) throw new RuleError('El mensaje está vacío.');
+    state.messages.push({ ...base, kind: 'text', text });
+  } else {
+    if (!isCloudinaryImage(content)) throw new RuleError('Esa imagen no es válida.');
+    state.messages.push({ ...base, kind: 'image', url: content });
+  }
+
+  if (state.messages.length > MAX_MESSAGES) {
+    state.messages = state.messages.slice(-MAX_MESSAGES);
   }
 }
 

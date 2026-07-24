@@ -63,7 +63,7 @@ export function RoundTable({ state, youId, onTable, reveal, reactions }: Props) 
       {/* Triunfo, fijo pegado a la izquierda del paño */}
       {state.trumpCard ? (
         <div
-          className="absolute top-1/2 left-[17%] z-10 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-0.5"
+          className="absolute top-1/2 left-[26%] z-10 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-0.5"
           style={{ containerType: 'inline-size', width: trumpW }}
         >
           <span className="font-semibold text-white/70" style={{ fontSize: tinySize }}>
@@ -79,7 +79,7 @@ export function RoundTable({ state, youId, onTable, reveal, reactions }: Props) 
       ) : (
         state.phase !== 'lobby' && (
           <div
-            className="absolute top-1/2 left-[17%] z-10 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-0.5 text-center"
+            className="absolute top-1/2 left-[26%] z-10 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-0.5 text-center"
             style={{ width: trumpW }}
           >
             <span className="font-semibold text-white/70" style={{ fontSize: tinySize }}>

@@ -89,6 +89,9 @@ export interface RoomState {
    *  mostrar solos por tiempo. Se guardan pocos para no engordar el estado. */
   reactions: Reaction[];
   reactionSeq: number;
+  /** Chat de la sala. Persiste durante la partida, acotado a los últimos N. */
+  messages: ChatMessage[];
+  messageSeq: number;
   /** Secreto por jugador. Nunca sale del servidor: se borra al redactar. */
   tokens: Record<string, string>;
 }
@@ -102,6 +105,22 @@ export interface Reaction {
 
 /** Cuántos stickers recientes se conservan. */
 export const MAX_REACTIONS = 12;
+
+export interface ChatMessage {
+  seq: number;
+  playerId: string;
+  name: string;
+  kind: 'text' | 'image';
+  /** Presente en `text`. */
+  text?: string;
+  /** Presente en `image`: URL de Cloudinary. */
+  url?: string;
+  at: number;
+}
+
+/** Cuántos mensajes de chat se conservan (los más viejos se descartan). */
+export const MAX_MESSAGES = 60;
+export const MAX_MESSAGE_CHARS = 400;
 
 export const MIN_PLAYERS = 2;
 export const MAX_PLAYERS = 8;

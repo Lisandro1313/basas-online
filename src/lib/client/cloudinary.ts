@@ -62,3 +62,55 @@ export async function uploadEmote(file: File): Promise<string> {
   }
   return data.secure_url as string;
 }
+
+/** Reduce una imagen a un lado máximo antes de subirla, para no gastar cuota. */
+async function shrinkImage(file: File, maxSide = 1280, quality = 0.82): Promise<Blob> {
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+  const w = Math.round(bitmap.width * scale);
+  const h = Math.round(bitmap.height * scale);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('No se pudo procesar la imagen.');
+  ctx.drawImage(bitmap, 0, 0, w, h);
+  bitmap.close();
+
+  return new Promise((resolve, reject) =>
+    canvas.toBlob(
+      (b) => (b ? resolve(b) : reject(new Error('No se pudo procesar la imagen.'))),
+      'image/jpeg',
+      quality
+    )
+  );
+}
+
+/** Sube una foto del chat a Cloudinary y devuelve su URL. */
+export async function uploadChatImage(file: File): Promise<string> {
+  if (!file.type.startsWith('image/')) throw new Error('Tiene que ser una imagen.');
+
+  const blob = await shrinkImage(file);
+
+  const signRes = await fetch('/api/cloudinary/sign', { method: 'POST' });
+  if (!signRes.ok) throw new Error('No se pudo preparar la subida.');
+  const { cloudName, apiKey, timestamp, folder, signature } = await signRes.json();
+
+  const form = new FormData();
+  form.append('file', blob);
+  form.append('api_key', apiKey);
+  form.append('timestamp', String(timestamp));
+  form.append('folder', folder);
+  form.append('signature', signature);
+
+  const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+    method: 'POST',
+    body: form,
+  });
+  const data = await res.json();
+  if (!res.ok || !data.secure_url) {
+    throw new Error(data.error?.message ?? 'Cloudinary rechazó la imagen.');
+  }
+  return data.secure_url as string;
+}

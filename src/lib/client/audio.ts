@@ -323,6 +323,12 @@ function blip(freq: number, when: number, dur: number, gain: number, type: Oscil
 // Los stickers suenan un 30% más fuerte que el resto de los efectos.
 const STK = 1.3;
 
+/** Aviso suave de mensaje de chat nuevo. */
+export function sndChat() {
+  blip(880, 0, 0.09, 0.06, 'sine');
+  blip(1174.66, 0.05, 0.1, 0.05, 'sine');
+}
+
 /** Reproduce el sonido de un sticker. Los nombres coinciden con Sticker.sound. */
 export function playStickerSound(sound: string | null) {
   if (!sound || !prefEnabled('sfx')) return;
@@ -363,82 +369,136 @@ export function playStickerSound(sound: string | null) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Música de fondo: house alegre, sintética                            */
+/* Música de fondo: pieza orquestal de aventura (original)             */
 /* ------------------------------------------------------------------ */
 
-// Do mayor pentatónica: siempre suena luminosa, nunca triste.
-const LEAD = [523.25, 587.33, 659.25, 783.99, 880, 1046.5];
-const BASS_NOTES = [130.81, 130.81, 174.61, 196]; // C C F G, un giro alegre
-let barIndex = 0;
+// Progresión heroica en Re mayor: vi - IV - I - V (Bm - G - D - A). Da esa
+// épica luminosa de banda sonora de aventura. Melodía propia, no de nadie.
+const CHORDS = [
+  { root: 123.47, notes: [246.94, 293.66, 369.99] }, // Bm  (B3 D4 F#4)
+  { root: 98.0, notes: [246.94, 293.66, 392.0] }, // G   (B3 D4 G4)
+  { root: 146.83, notes: [293.66, 369.99, 440.0] }, // D   (D4 F#4 A4)
+  { root: 110.0, notes: [277.18, 329.63, 440.0] }, // A   (C#4 E4 A4)
+];
 
-/** Nota de sinte con filtro: sierra + lowpass resonante, brillante y eléctrica. */
-function synth(freq: number, when: number, dur: number, gainValue: number, cutoff = 2600) {
+// Motivo heroico propio, una frase por acorde (grados sobre Re mayor).
+const D = { d4: 293.66, e4: 329.63, fs4: 369.99, g4: 392.0, a4: 440.0, b4: 493.88, cs5: 554.37, d5: 587.33, e5: 659.25, fs5: 739.99 };
+const MELODY = [
+  [D.fs4, D.a4, D.b4, D.d5], // sobre Bm: ascenso
+  [D.b4, D.a4, D.g4, D.b4], // sobre G
+  [D.a4, D.fs4, D.d4, D.fs4], // sobre D: resuelve grave
+  [D.e4, D.g4, D.fs4, D.a4], // sobre A: tensión que empuja al loop
+];
+let phraseIndex = 0;
+
+/** Cuerdas: varias sierras suaves con ataque lento y lowpass cálido, sostenidas. */
+function strings(freqs: number[], when: number, dur: number, gainValue: number) {
   const ac = ctx;
   if (!ac || !musicGain || !wet) return;
-
   const env = ac.createGain();
   env.gain.setValueAtTime(0, when);
-  env.gain.linearRampToValueAtTime(gainValue, when + 0.012);
+  env.gain.linearRampToValueAtTime(gainValue, when + 0.6); // ataque de arco
+  env.gain.setValueAtTime(gainValue, when + dur - 0.7);
   env.gain.exponentialRampToValueAtTime(0.0001, when + dur);
 
   const filter = ac.createBiquadFilter();
   filter.type = 'lowpass';
-  filter.Q.value = 4;
-  filter.frequency.setValueAtTime(cutoff, when);
-  filter.frequency.exponentialRampToValueAtTime(700, when + dur);
+  filter.frequency.value = 2000;
+  filter.Q.value = 0.5;
 
-  for (const detune of [-7, 7]) {
-    const osc = ac.createOscillator();
-    osc.type = 'sawtooth';
-    osc.frequency.value = freq;
-    osc.detune.value = detune;
-    osc.connect(filter);
-    osc.start(when);
-    osc.stop(when + dur + 0.02);
+  for (const f of freqs) {
+    for (const detune of [-8, 8]) {
+      const osc = ac.createOscillator();
+      osc.type = 'sawtooth';
+      osc.frequency.value = f;
+      osc.detune.value = detune;
+      osc.connect(filter);
+      osc.start(when);
+      osc.stop(when + dur + 0.05);
+    }
   }
   filter.connect(env);
   env.connect(musicGain);
   env.connect(wet);
 }
 
-/** Bombo electrónico: seno que cae rápido de tono. */
-function kick(when: number, gainValue: number) {
+/** Metal (trompa/corno): la melodía, sierra más brillante con vibrato leve. */
+function brass(freq: number, when: number, dur: number, gainValue: number) {
+  const ac = ctx;
+  if (!ac || !musicGain || !wet) return;
+  const env = ac.createGain();
+  env.gain.setValueAtTime(0, when);
+  env.gain.linearRampToValueAtTime(gainValue, when + 0.08);
+  env.gain.setValueAtTime(gainValue, when + dur - 0.15);
+  env.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+
+  const filter = ac.createBiquadFilter();
+  filter.type = 'lowpass';
+  filter.frequency.setValueAtTime(1200, when);
+  filter.frequency.linearRampToValueAtTime(3000, when + 0.12); // el metal "abre"
+  filter.Q.value = 1.5;
+
+  const vib = ac.createOscillator();
+  vib.frequency.value = 5.5;
+  const vibGain = ac.createGain();
+  vibGain.gain.value = freq * 0.006;
+  vib.connect(vibGain);
+
+  for (const detune of [-4, 5]) {
+    const osc = ac.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.value = freq;
+    osc.detune.value = detune;
+    vibGain.connect(osc.frequency);
+    osc.connect(filter);
+    osc.start(when);
+    osc.stop(when + dur + 0.05);
+  }
+  vib.start(when);
+  vib.stop(when + dur + 0.05);
+  filter.connect(env);
+  env.connect(musicGain);
+  env.connect(wet);
+}
+
+/** Arpa: notas del acorde en cascada, triangular con cola. */
+function harp(freq: number, when: number, gainValue: number) {
+  const ac = ctx;
+  if (!ac || !musicGain || !wet) return;
+  const env = ac.createGain();
+  env.gain.setValueAtTime(0, when);
+  env.gain.linearRampToValueAtTime(gainValue, when + 0.02);
+  env.gain.exponentialRampToValueAtTime(0.0001, when + 1.8);
+  const osc = ac.createOscillator();
+  osc.type = 'triangle';
+  osc.frequency.value = freq;
+  osc.connect(env);
+  env.connect(musicGain);
+  env.connect(wet);
+  osc.start(when);
+  osc.stop(when + 1.9);
+}
+
+/** Timbal: golpe grave y redondo en el arranque de cada acorde. */
+function timpani(freq: number, when: number, gainValue: number) {
   const ac = ctx;
   if (!ac || !musicGain) return;
   const osc = ac.createOscillator();
   osc.type = 'sine';
-  osc.frequency.setValueAtTime(150, when);
-  osc.frequency.exponentialRampToValueAtTime(50, when + 0.12);
+  osc.frequency.setValueAtTime(freq * 1.4, when);
+  osc.frequency.exponentialRampToValueAtTime(freq, when + 0.1);
   const g = ac.createGain();
   g.gain.setValueAtTime(gainValue, when);
-  g.gain.exponentialRampToValueAtTime(0.0001, when + 0.16);
+  g.gain.exponentialRampToValueAtTime(0.0001, when + 0.5);
   osc.connect(g).connect(musicGain);
   osc.start(when);
-  osc.stop(when + 0.18);
-}
-
-/** Hi-hat: ruidito corto y agudo, marca el offbeat. */
-function hat(when: number, gainValue: number) {
-  const ac = ctx;
-  if (!ac || !musicGain) return;
-  const src = ac.createBufferSource();
-  src.buffer = noiseBuffer(ac);
-  src.loop = true;
-  const hp = ac.createBiquadFilter();
-  hp.type = 'highpass';
-  hp.frequency.value = 8000;
-  const g = ac.createGain();
-  g.gain.setValueAtTime(gainValue, when);
-  g.gain.exponentialRampToValueAtTime(0.0001, when + 0.05);
-  src.connect(hp).connect(g).connect(musicGain);
-  src.start(when);
-  src.stop(when + 0.06);
+  osc.stop(when + 0.55);
 }
 
 /**
- * Loop house alegre: 8 pasos por compás (~112 BPM), con bombo en negras, hats
- * en las corcheas, bajo saltarín y un arpegio brillante que se rearma solo.
- * No se repite igual porque el arpegio se elige al azar dentro de la escala.
+ * Pieza orquestal generativa de aventura. Cada acorde dura ~4,4s: cuerdas
+ * sostenidas de fondo, un timbal al entrar, arpa en cascada y la melodía de
+ * metal encima. La melodía varía un poco cada vuelta, así no se vuelve repetitiva.
  */
 export function startMusic() {
   const ac = audio();
@@ -451,30 +511,33 @@ export function startMusic() {
   }
   musicGain.gain.cancelScheduledValues(ac.currentTime);
   musicGain.gain.setValueAtTime(musicGain.gain.value, ac.currentTime);
-  musicGain.gain.linearRampToValueAtTime(0.12, ac.currentTime + 1.5);
+  musicGain.gain.linearRampToValueAtTime(0.14, ac.currentTime + 3);
 
-  const step = 0.268; // ~112 BPM en corcheas
-  const bar = () => {
+  const barDur = 4.4;
+  const phrase = () => {
     if (!ctx) return;
     const t = ctx.currentTime + 0.05;
-    const root = BASS_NOTES[barIndex % BASS_NOTES.length];
-    barIndex++;
+    const chord = CHORDS[phraseIndex % CHORDS.length];
+    const mel = MELODY[phraseIndex % MELODY.length];
+    phraseIndex++;
 
-    for (let i = 0; i < 8; i++) {
-      const w = t + i * step;
-      if (i % 2 === 0) kick(w, 0.5); // bombo en cada negra
-      if (i % 2 === 1) hat(w, 0.12); // hat en el offbeat
-      // bajo saltarín: raíz y su octava
-      synth(i % 4 === 0 ? root : root * 1.5, w, 0.22, 0.14, 1200);
-    }
-    // arpegio brillante encima, 4 notas al azar
-    for (let i = 0; i < 4; i++) {
-      synth(LEAD[Math.floor(Math.random() * LEAD.length)], t + i * step * 2, 0.4, 0.09, 3000);
-    }
+    // cuerdas sostienen el acorde toda la frase
+    strings([chord.root, ...chord.notes], t, barDur, 0.055);
+    // timbal al entrar
+    timpani(chord.root, t, 0.5);
+    // arpa: cascada de las notas del acorde
+    chord.notes.forEach((n, i) => harp(n, t + 0.15 + i * 0.14, 0.09));
+    harp(chord.notes[chord.notes.length - 1] * 2, t + 0.15 + chord.notes.length * 0.14, 0.07);
+
+    // melodía de metal: 4 notas repartidas en la frase, con alguna octava al azar
+    mel.forEach((n, i) => {
+      const note = Math.random() < 0.15 ? n * 2 : n;
+      brass(note, t + 0.3 + i * (barDur - 0.5) / 4, (barDur - 0.5) / 4 - 0.05, 0.075);
+    });
   };
 
-  bar();
-  musicTimer = setInterval(bar, step * 8 * 1000);
+  phrase();
+  musicTimer = setInterval(phrase, barDur * 1000);
 }
 
 export function stopMusic() {

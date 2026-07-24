@@ -3,6 +3,7 @@
 import { use, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { AudioControls } from '@/components/AudioControls';
+import { ChatPanel } from '@/components/ChatPanel';
 import { GameOver } from '@/components/GameOver';
 import { GameTable } from '@/components/GameTable';
 import { Lobby } from '@/components/Lobby';
@@ -125,6 +126,8 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
       {showTable && <GameTable {...props} />}
       {state.phase === 'roundEnd' && !holdTable && <RoundSummary {...props} />}
       {state.phase === 'gameOver' && <GameOver {...props} />}
+
+      <ChatPanel state={state} youId={youId} act={room.act} />
     </main>
   );
 }

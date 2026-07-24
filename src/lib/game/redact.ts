@@ -1,6 +1,6 @@
 import { PAUSE_SECONDS, TURN_SECONDS, forbiddenBid } from './engine';
 import { playableCards } from './cards';
-import type { Card, Phase, PlayedCard, RoundHistory, Suit } from './types';
+import type { Card, ChatMessage, Phase, PlayedCard, RoundHistory, Suit } from './types';
 import type { RoomState } from './types';
 
 export interface PublicPlayer {
@@ -44,6 +44,7 @@ export interface PublicState {
   winnerId: string | null;
   log: string[];
   reactions: { seq: number; playerId: string; sticker: string; at: number }[];
+  messages: ChatMessage[];
   /** Todo lo que sigue es específico del jugador que pide el estado. */
   you: {
     id: string;
@@ -101,6 +102,7 @@ export function redact(state: RoomState, viewerId: string | null): PublicState {
     log: state.log.slice(-12),
     // Solo las de los últimos segundos: las viejas no le sirven a nadie.
     reactions: state.reactions.filter((r) => now - r.at < 6000),
+    messages: state.messages ?? [],
     you: viewer
       ? {
           id: viewer.id,

@@ -55,6 +55,16 @@ function playerName(state: RoomState, id: string): string {
   return state.players.find((p) => p.id === id)?.name ?? '???';
 }
 
+/**
+ * Busca a un participante entre los sentados y los que esperan la próxima mano.
+ * Para chatear, reaccionar o cambiar el avatar da igual si ya estás jugando.
+ */
+function findParticipant(state: RoomState, id: string): Player | undefined {
+  return (
+    state.players.find((p) => p.id === id) ?? (state.pending ?? []).find((p) => p.id === id)
+  );
+}
+
 /** Tope duro: una mano más grande no entra en la pantalla de un celular. */
 const HAND_CAP = 10;
 
@@ -254,7 +264,7 @@ export function sendChat(
   kind: 'text' | 'image',
   content: string
 ) {
-  const player = state.players.find((p) => p.id === playerId);
+  const player = findParticipant(state, playerId);
   if (!player) throw new RuleError('No estás en esta sala.');
 
   const now = Date.now();
@@ -285,7 +295,7 @@ export function sendChat(
 
 /** Registra un emote de video propio (URL de Cloudinary) en el jugador. */
 export function addEmote(state: RoomState, playerId: string, url: string) {
-  const player = state.players.find((p) => p.id === playerId);
+  const player = findParticipant(state, playerId);
   if (!player) throw new RuleError('No estás en esta sala.');
   if (!isCloudinaryVideo(url)) throw new RuleError('Ese video no es válido.');
   if (player.emotes.includes(url)) return;
@@ -294,7 +304,7 @@ export function addEmote(state: RoomState, playerId: string, url: string) {
 
 /** Tira un sticker a la mesa. Anti-spam: uno cada 700 ms por jugador. */
 export function sendReaction(state: RoomState, playerId: string, sticker: string) {
-  const player = state.players.find((p) => p.id === playerId);
+  const player = findParticipant(state, playerId);
   if (!player) throw new RuleError('No estás en esta sala.');
   // El sticker es o un id del catálogo, o `url:<video de Cloudinary>`.
   if (sticker.startsWith('url:')) {
@@ -316,7 +326,7 @@ export function sendReaction(state: RoomState, playerId: string, sticker: string
 
 /** Cambia el avatar: un emoji de la lista o una foto ya reducida por el cliente. */
 export function setAvatar(state: RoomState, playerId: string, avatar: string | null) {
-  const player = state.players.find((p) => p.id === playerId);
+  const player = findParticipant(state, playerId);
   if (!player) throw new RuleError('No estás en esta sala.');
 
   if (avatar === null) {
@@ -356,6 +366,14 @@ export function addBot(state: RoomState) {
 }
 
 export function removePlayer(state: RoomState, playerId: string) {
+  // Si sólo estás esperando la próxima mano, podés salir cuando quieras.
+  const pending = state.pending ?? [];
+  if (pending.some((p) => p.id === playerId)) {
+    state.pending = pending.filter((p) => p.id !== playerId);
+    delete state.tokens[playerId];
+    return;
+  }
+
   if (state.phase !== 'lobby') throw new RuleError('No se puede salir con la partida en curso.');
   const player = state.players.find((p) => p.id === playerId);
   if (!player) return;

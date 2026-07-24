@@ -141,10 +141,12 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
         </div>
       )}
 
-      {state.phase === 'lobby' && <Lobby {...props} />}
-      {showTable && <GameTable {...props} />}
-      {state.phase === 'roundEnd' && !holdTable && <RoundSummary {...props} />}
-      {state.phase === 'gameOver' && <GameOver {...props} />}
+      <div key={showTable ? 'table' : state.phase} className="screen-in">
+        {state.phase === 'lobby' && <Lobby {...props} />}
+        {showTable && <GameTable {...props} />}
+        {state.phase === 'roundEnd' && !holdTable && <RoundSummary {...props} />}
+        {state.phase === 'gameOver' && <GameOver {...props} />}
+      </div>
 
       <ChatPanel state={state} youId={youId} act={room.act} />
     </main>

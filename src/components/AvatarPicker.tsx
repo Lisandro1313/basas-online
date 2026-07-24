@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { Avatar } from './Avatar';
+import { cloudinaryEnabled, uploadAvatar } from '@/lib/client/cloudinary';
 import { AVATAR_EMOJIS, MAX_AVATAR_CHARS } from '@/lib/game/types';
 
 interface Props {
@@ -12,9 +13,9 @@ interface Props {
 }
 
 /**
- * Reduce la foto a un cuadrado chico antes de mandarla. La imagen viaja dentro
- * del estado de la sala, que es un documento de Firestore con tope de 1 MB:
- * subir el archivo original lo reventaría con dos jugadores.
+ * Respaldo cuando Cloudinary no está configurado: reduce la foto a un cuadrado
+ * chico y la manda como data URL. Con Cloudinary preferimos subir y guardar solo
+ * la URL, que no engorda el estado (ver pickFile).
  */
 async function shrink(file: File): Promise<string> {
   const bitmap = await createImageBitmap(file);
@@ -60,7 +61,9 @@ export function AvatarPicker({ name, avatar, busy, act }: Props) {
     setError(null);
     setWorking(true);
     try {
-      await act({ type: 'avatar', avatar: await shrink(file) });
+      // Con Cloudinary: subimos y guardamos la URL (corta). Si no, data URL chica.
+      const avatarValue = cloudinaryEnabled() ? await uploadAvatar(file) : await shrink(file);
+      await act({ type: 'avatar', avatar: avatarValue });
       setOpen(false);
     } catch {
       setError('No se pudo usar esa imagen. Probá con otra.');

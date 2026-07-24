@@ -46,6 +46,28 @@ body {
   animation: deal-in 0.25s ease-out both;
 }
 
+/* Fundido suave al cambiar de pantalla (lobby, mesa, resumen…). */
+@keyframes screen-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.screen-in {
+  animation: screen-in 0.18s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .screen-in {
+    animation: none;
+  }
+}
+
 @keyframes pulse-ring {
   0%,
   100% {

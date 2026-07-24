@@ -26,11 +26,12 @@ export function Avatar({ name, avatar, size = 40, fluid, className = '' }: Props
     );
   }
 
-  if (avatar?.startsWith('data:image/')) {
+  // Foto: URL de Cloudinary (lo normal) o data URL (respaldo/legado).
+  if (avatar?.startsWith('http') || avatar?.startsWith('data:image/')) {
     return (
       <span className={base} style={style}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={avatar} alt={name} className="h-full w-full object-cover" />
+        <img src={avatar} alt={name} className="h-full w-full object-cover" loading="lazy" />
       </span>
     );
   }

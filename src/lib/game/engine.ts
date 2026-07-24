@@ -347,6 +347,13 @@ export function setAvatar(state: RoomState, playerId: string, avatar: string | n
     return;
   }
 
+  // Preferido: foto hosteada en Cloudinary (una URL corta, no engorda el estado).
+  if (isCloudinaryImage(avatar)) {
+    player.avatar = avatar;
+    return;
+  }
+
+  // Respaldo si Cloudinary no está configurado: la foto va como data URL chica.
   if (!avatar.startsWith('data:image/')) throw new RuleError('Formato de imagen inválido.');
   if (avatar.length > MAX_AVATAR_CHARS) throw new RuleError('La foto es muy pesada.');
   player.avatar = avatar;

@@ -87,6 +87,71 @@ async function shrinkImage(file: File, maxSide = 1280, quality = 0.82): Promise<
   );
 }
 
+/** Recorta cuadrado desde el centro y reduce a `size` px. Para avatares. */
+async function squareCrop(file: File, size = 256, quality = 0.85): Promise<Blob> {
+  const bitmap = await createImageBitmap(file);
+  const side = Math.min(bitmap.width, bitmap.height);
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('No se pudo procesar la imagen.');
+  ctx.drawImage(
+    bitmap,
+    (bitmap.width - side) / 2,
+    (bitmap.height - side) / 2,
+    side,
+    side,
+    0,
+    0,
+    size,
+    size
+  );
+  bitmap.close();
+  return new Promise((resolve, reject) =>
+    canvas.toBlob(
+      (b) => (b ? resolve(b) : reject(new Error('No se pudo procesar la imagen.'))),
+      'image/jpeg',
+      quality
+    )
+  );
+}
+
+/**
+ * Sube un avatar cuadrado a Cloudinary y devuelve su URL. Así el avatar viaja
+ * como una URL corta en el estado, en vez de una data URL pesada que se baja
+ * en cada actualización.
+ */
+export async function uploadAvatar(file: File): Promise<string> {
+  if (!file.type.startsWith('image/')) throw new Error('Tiene que ser una imagen.');
+  const blob = await squareCrop(file);
+  return uploadBlob(blob, 'image');
+}
+
+/** Firma y sube un blob a Cloudinary; devuelve la URL segura. */
+async function uploadBlob(blob: Blob, kind: 'image' | 'video'): Promise<string> {
+  const signRes = await fetch('/api/cloudinary/sign', { method: 'POST' });
+  if (!signRes.ok) throw new Error('No se pudo preparar la subida.');
+  const { cloudName, apiKey, timestamp, folder, signature } = await signRes.json();
+
+  const form = new FormData();
+  form.append('file', blob);
+  form.append('api_key', apiKey);
+  form.append('timestamp', String(timestamp));
+  form.append('folder', folder);
+  form.append('signature', signature);
+
+  const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/${kind}/upload`, {
+    method: 'POST',
+    body: form,
+  });
+  const data = await res.json();
+  if (!res.ok || !data.secure_url) {
+    throw new Error(data.error?.message ?? 'Cloudinary rechazó el archivo.');
+  }
+  return data.secure_url as string;
+}
+
 /** Sube una foto del chat a Cloudinary y devuelve su URL. */
 export async function uploadChatImage(file: File): Promise<string> {
   if (!file.type.startsWith('image/')) throw new Error('Tiene que ser una imagen.');

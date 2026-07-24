@@ -18,6 +18,7 @@ import {
   sendReaction,
   setAvatar,
   setRoomName,
+  setVisibility,
   startGame,
 } from '@/lib/game/engine';
 import { assertToken, mutateRoom } from '@/lib/rooms';
@@ -106,6 +107,11 @@ export async function POST(
           if (!isHost) throw new RuleError('Solo el anfitrión puede renombrar la sala.');
           if (typeof body.name !== 'string') throw new RuleError('Falta el nombre.');
           setRoomName(draft, body.name);
+          break;
+
+        case 'visibility':
+          if (!isHost) throw new RuleError('Solo el anfitrión cambia la visibilidad.');
+          setVisibility(draft, Boolean(body.isPublic));
           break;
 
         case 'avatar':

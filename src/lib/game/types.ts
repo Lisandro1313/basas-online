@@ -52,6 +52,8 @@ export interface RoomState {
   code: string;
   /** Nombre visible en la lista de salas. */
   name: string;
+  /** Si es pública aparece en la lista; si no, solo se entra con el código. */
+  isPublic: boolean;
   hostId: string;
   phase: Phase;
   players: Player[];

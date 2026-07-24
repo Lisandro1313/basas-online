@@ -5,6 +5,7 @@ import { PlayingCard } from './PlayingCard';
 import { PauseOverlay } from './PauseOverlay';
 import { RoundTable } from './RoundTable';
 import { StickerBar } from './StickerBar';
+import { GameHistory } from './GameHistory';
 import { useReactions } from '@/lib/client/useReactions';
 import {
   sndBid,
@@ -385,7 +386,7 @@ export function GameTable({ state, youId, busy, act }: Props) {
         </div>
       )}
 
-      {/* Registro */}
+      {/* Registro de la mano actual */}
       <details className="rounded-xl border border-white/10 bg-slate-950/60 px-4 py-2 text-sm">
         <summary className="cursor-pointer text-white/60">Historial de la mano</summary>
         <ul className="mt-2 space-y-0.5 text-white/70">
@@ -394,6 +395,9 @@ export function GameTable({ state, youId, busy, act }: Props) {
           ))}
         </ul>
       </details>
+
+      {/* Recorrido de toda la partida */}
+      <GameHistory state={state} youId={youId} />
     </div>
   );
 }

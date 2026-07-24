@@ -112,9 +112,15 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
           <AudioControls />
           <span className="flex items-center gap-1">
             <span
-              className={`h-2 w-2 rounded-full ${room.live ? 'bg-emerald-400' : 'bg-amber-400'}`}
+              className={`h-2 w-2 rounded-full ${
+                !room.connected
+                  ? 'animate-pulse bg-rose-400'
+                  : room.live
+                    ? 'bg-emerald-400'
+                    : 'bg-amber-400'
+              }`}
             />
-            {room.live ? 'en vivo' : 'sincronizando'}
+            {!room.connected ? 'reconectando…' : room.live ? 'en vivo' : 'sincronizando'}
           </span>
         </span>
       </div>

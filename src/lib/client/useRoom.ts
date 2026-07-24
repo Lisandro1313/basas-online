@@ -10,6 +10,7 @@ export interface RoomHook {
   state: PublicState | null;
   error: string | null;
   live: boolean;
+  connected: boolean;
   busy: boolean;
   act: (payload: Record<string, unknown>, opts?: { silent?: boolean }) => Promise<void>;
   refresh: () => Promise<void>;
@@ -26,6 +27,7 @@ export function useRoom(code: string, session: Session | null): RoomHook {
   const [state, setState] = useState<PublicState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [live, setLive] = useState(false);
+  const [connected, setConnected] = useState(true);
   const [busy, setBusy] = useState(false);
   const versionRef = useRef(0);
   const sessionRef = useRef(session);
@@ -47,8 +49,10 @@ export function useRoom(code: string, session: Session | null): RoomHook {
       }
       versionRef.current = data.version;
       setState(data.state);
+      setConnected(true); // una lectura buena = estamos conectados
     } catch {
-      setError('Se cortó la conexión con el servidor.');
+      // Sin cartel rojo: el indicador de "reconectando…" ya lo comunica.
+      setConnected(false);
     }
   }, [code]);
 
@@ -122,6 +126,7 @@ export function useRoom(code: string, session: Session | null): RoomHook {
     state,
     error,
     live,
+    connected,
     busy,
     act,
     refresh,

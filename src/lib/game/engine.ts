@@ -122,6 +122,7 @@ export function createRoom(code: string, hostName: string, hostId: string, token
   const state: RoomState = {
     code,
     name: `Mesa de ${hostName.trim().slice(0, 16) || 'alguien'}`,
+    isPublic: true,
     hostId,
     phase: 'lobby',
     players: [],
@@ -227,6 +228,11 @@ export function setRoomName(state: RoomState, name: string) {
   const clean = name.replace(/\p{Cc}/gu, ' ').trim().slice(0, 30);
   if (!clean) throw new RuleError('Poné un nombre para la sala.');
   state.name = clean;
+}
+
+/** Pública (aparece en la lista) o privada (solo con el código). */
+export function setVisibility(state: RoomState, isPublic: boolean) {
+  state.isPublic = isPublic;
 }
 
 /** Solo se aceptan videos servidos por Cloudinary, para no cargar URLs random. */

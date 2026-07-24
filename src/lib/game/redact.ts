@@ -18,6 +18,7 @@ export interface PublicPlayer {
 export interface PublicState {
   code: string;
   name: string;
+  isPublic: boolean;
   hostId: string;
   phase: Phase;
   players: PublicPlayer[];
@@ -70,6 +71,7 @@ export function redact(state: RoomState, viewerId: string | null): PublicState {
   return {
     code: state.code,
     name: state.name ?? `Sala ${state.code}`,
+    isPublic: state.isPublic ?? true,
     hostId: state.hostId,
     phase: state.phase,
     players: state.players.map((p) => ({

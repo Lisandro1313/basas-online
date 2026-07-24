@@ -37,6 +37,7 @@ interface RoomDoc {
    * completo va serializado y no se puede consultar por dentro.
    */
   name?: string;
+  isPublic?: boolean;
   phase?: string;
   playerCount?: number;
   playerNames?: string[];
@@ -49,6 +50,7 @@ function summary(state: RoomState) {
   const players = [...state.players, ...(state.pending ?? [])];
   return {
     name: state.name ?? `Sala ${state.code}`,
+    isPublic: state.isPublic ?? true,
     phase: state.phase,
     playerCount: players.length,
     playerNames: players.map((p) => p.name).slice(0, 8),
@@ -152,22 +154,32 @@ export async function listRooms(limit = 30): Promise<RoomSummary[]> {
     .limit(limit)
     .get();
 
-  return snap.docs
-    .map((d) => {
-      const doc = d.data() as RoomDoc;
-      return {
-        code: d.id,
-        name: doc.name ?? `Sala ${d.id}`,
-        phase: doc.phase ?? 'lobby',
-        playerCount: doc.playerCount ?? 0,
-        playerNames: doc.playerNames ?? [],
-        round: doc.round ?? 0,
-        totalRounds: doc.totalRounds ?? 0,
-        updatedAt: doc.updatedAt ?? 0,
-      };
-    })
-    // Las partidas terminadas y las vacías no aportan nada en la lista.
-    .filter((r) => r.phase !== 'gameOver' && r.playerCount > 0);
+  return (
+    snap.docs
+      .map((d) => {
+        const doc = d.data() as RoomDoc;
+        return {
+          code: d.id,
+          name: doc.name ?? `Sala ${d.id}`,
+          phase: doc.phase ?? 'lobby',
+          playerCount: doc.playerCount ?? 0,
+          playerNames: doc.playerNames ?? [],
+          round: doc.round ?? 0,
+          totalRounds: doc.totalRounds ?? 0,
+          updatedAt: doc.updatedAt ?? 0,
+          isPublic: doc.isPublic ?? true,
+        };
+      })
+      // Fuera: privadas, terminadas y vacías.
+      .filter((r) => r.isPublic && r.phase !== 'gameOver' && r.playerCount > 0)
+      // Primero las que están en lobby (se entra sin esperar), luego lo más nuevo.
+      .sort((a, b) => {
+        const aLobby = a.phase === 'lobby' ? 0 : 1;
+        const bLobby = b.phase === 'lobby' ? 0 : 1;
+        return aLobby - bLobby || b.updatedAt - a.updatedAt;
+      })
+      .map(({ isPublic: _omit, ...r }) => r)
+  );
 }
 
 export function assertToken(state: RoomState, playerId: string, token: string) {

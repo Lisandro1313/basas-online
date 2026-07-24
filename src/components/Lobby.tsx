@@ -55,6 +55,30 @@ export function Lobby({ state, youId, busy, act }: Props) {
         >
           {copied ? '¡Link copiado!' : 'Copiar link de invitación'}
         </button>
+
+        {isHost && (
+          <div className="mt-3 flex items-center justify-center gap-2 text-sm">
+            <button
+              onClick={() => void act({ type: 'visibility', isPublic: !state.isPublic })}
+              disabled={busy}
+              className={`rounded-lg px-3 py-1.5 font-semibold transition ${
+                state.isPublic
+                  ? 'bg-emerald-400/20 text-emerald-300'
+                  : 'bg-white/10 text-white/70'
+              }`}
+              title={
+                state.isPublic
+                  ? 'Aparece en la lista de salas'
+                  : 'Solo entra quien tenga el código'
+              }
+            >
+              {state.isPublic ? '🌎 Pública' : '🔒 Privada'}
+            </button>
+            <span className="text-xs text-white/45">
+              {state.isPublic ? 'aparece en la lista' : 'solo con el código'}
+            </span>
+          </div>
+        )}
       </div>
 
       {you && <AvatarPicker name={you.name} avatar={you.avatar} busy={busy} act={act} />}

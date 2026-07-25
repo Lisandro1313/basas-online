@@ -40,8 +40,11 @@ export interface PublicState {
   pauseSeconds: number;
   botReadyAt: number | null;
   trickPauseUntil: number | null;
-  /** Cuántas cartas toca en cada ronda, sorteado al empezar. */
+  /** Cuántas cartas toca en cada ronda. */
   roundCards: number[];
+  /** Rondas (1-based) sin triunfo. */
+  noTrumpRounds: number[];
+  gameLength: 'corta' | 'larga' | null;
   /** Reloj del servidor al responder: el cliente corrige su propio desfasaje. */
   serverNow: number;
   turnSeconds: number;
@@ -116,6 +119,8 @@ export function redact(state: RoomState, viewerId: string | null): PublicState {
     botReadyAt: state.botReadyAt,
     trickPauseUntil: state.trickPauseUntil,
     roundCards: state.roundCards,
+    noTrumpRounds: state.noTrumpRounds ?? [],
+    gameLength: state.gameLength ?? null,
     serverNow: Date.now(),
     turnSeconds: TURN_SECONDS,
     history: state.history,

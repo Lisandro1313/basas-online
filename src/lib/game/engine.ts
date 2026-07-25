@@ -65,8 +65,36 @@ function findParticipant(state: RoomState, id: string): Player | undefined {
   );
 }
 
-/** Tope duro: una mano más grande no entra en la pantalla de un celular. */
-const HAND_CAP = 10;
+/** Tope de cartas por mano: las basas van hasta 8. */
+const HAND_CAP = 8;
+
+/**
+ * Formatos de partida. La secuencia es fija; los cierres marcados en `noTrump`
+ * se juegan sin triunfo. Con muchos jugadores las cartas se topean por mazo.
+ *
+ * Corta: 8 manos + un cierre de 8 sin triunfo (9 en total).
+ * Larga: la misma serie, la serie al revés, y dos cierres sin triunfo (18).
+ */
+const GAME_PRESETS: Record<'corta' | 'larga', { base: number[]; noTrump: number[] }> = {
+  corta: {
+    base: [2, 4, 1, 6, 8, 3, 7, 5, 8],
+    noTrump: [9],
+  },
+  larga: {
+    base: [2, 4, 1, 6, 8, 3, 7, 5, 8, 5, 7, 3, 8, 6, 1, 4, 2, 8],
+    noTrump: [9, 18],
+  },
+};
+
+/** Plan de un formato, con las cartas topeadas según cuántos jugadores hay. */
+export function presetPlan(length: 'corta' | 'larga', playerCount: number) {
+  const max = maxCardsPerRound(playerCount);
+  const preset = GAME_PRESETS[length];
+  return {
+    cards: preset.base.map((c) => Math.min(c, max)),
+    noTrump: [...preset.noTrump],
+  };
+}
 
 /**
  * Máximo de cartas por jugador según cuántos sean. El mazo tiene 52, pero una
@@ -124,6 +152,8 @@ export function createRoom(code: string, hostName: string, hostId: string, token
     name: `Mesa de ${hostName.trim().slice(0, 16) || 'alguien'}`,
     isPublic: true,
     gameId: null,
+    noTrumpRounds: [],
+    gameLength: null,
     hostId,
     phase: 'lobby',
     players: [],
@@ -237,10 +267,13 @@ function reconcilePlayers(state: RoomState, fromRound: number) {
     state.pending = [];
   }
 
-  // 3. Rehacer el plan de lo que falta para la nueva cantidad de jugadores.
+  // 3. Rehacer las cartas de lo que falta para la nueva cantidad de jugadores.
+  // Con formato fijo se re-topea la misma serie; en modo legado se resortea.
   const remaining = state.totalRounds - fromRound + 1;
   if (remaining > 0 && state.players.length > 0) {
-    const fresh = buildRoundPlan(remaining, state.players.length);
+    const fresh = state.gameLength
+      ? presetPlan(state.gameLength, state.players.length).cards.slice(fromRound - 1)
+      : buildRoundPlan(remaining, state.players.length);
     state.roundCards = [...state.roundCards.slice(0, fromRound - 1), ...fresh];
   }
 }
@@ -468,19 +501,32 @@ export function removePlayer(state: RoomState, playerId: string) {
   }
 }
 
-export function startGame(state: RoomState, totalRounds: number) {
+export function startGame(state: RoomState, length: 'corta' | 'larga' | number) {
   if (state.phase !== 'lobby') throw new RuleError('La partida ya arrancó.');
   if (state.players.length < MIN_PLAYERS) {
     throw new RuleError(`Hacen falta al menos ${MIN_PLAYERS} jugadores.`);
   }
-  state.totalRounds = Math.max(1, Math.min(20, Math.floor(totalRounds)));
-  state.roundCards = buildRoundPlan(state.totalRounds, state.players.length);
+
+  if (typeof length === 'number') {
+    // Modo legado (tests): plan aleatorio, última mano sin triunfo.
+    state.totalRounds = Math.max(1, Math.min(20, Math.floor(length)));
+    state.roundCards = buildRoundPlan(state.totalRounds, state.players.length);
+    state.noTrumpRounds = [state.totalRounds];
+    state.gameLength = null;
+  } else {
+    const plan = presetPlan(length, state.players.length);
+    state.roundCards = plan.cards;
+    state.noTrumpRounds = plan.noTrump;
+    state.totalRounds = plan.cards.length;
+    state.gameLength = length;
+  }
+
   state.round = 0;
   state.dealerIndex = state.players.length - 1;
   state.players = state.players.map((p) => ({ ...p, points: 0 }));
   state.history = [];
   state.gameId = crypto.randomUUID(); // identifica esta partida en el historial
-  log(state, `¡Arranca la partida! ${state.totalRounds} rondas.`);
+  log(state, `¡Arranca la partida! ${state.totalRounds} manos.`);
   startRound(state);
 }
 
@@ -503,9 +549,9 @@ export function startRound(state: RoomState) {
   const count = state.players.length;
   const perPlayer = state.roundCards[nextRound - 1] ?? maxCardsPerRound(count);
   const { hands, rest } = deal(shuffle(createDeck()), count, perPlayer);
-  // La última mano se juega sin triunfo.
-  const lastRound = nextRound === state.totalRounds;
-  const trumpCard = lastRound ? null : rest[0] ?? null;
+  // Las manos marcadas (los cierres de 8) se juegan sin triunfo.
+  const noTrump = (state.noTrumpRounds ?? []).includes(nextRound);
+  const trumpCard = noTrump ? null : rest[0] ?? null;
 
   state.round = nextRound;
   state.cardsThisRound = perPlayer;

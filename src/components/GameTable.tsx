@@ -208,7 +208,7 @@ export function GameTable({ state, youId, busy, act }: Props) {
               const round = i + 1;
               const done = round < state.round;
               const current = round === state.round;
-              const noTrump = round === state.totalRounds;
+              const noTrump = state.noTrumpRounds.includes(round);
               return (
                 <span
                   key={i}

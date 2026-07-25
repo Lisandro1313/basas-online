@@ -14,7 +14,7 @@ interface Props {
 }
 
 export function Lobby({ state, youId, busy, act }: Props) {
-  const [rounds, setRounds] = useState(8);
+  const [length, setLength] = useState<'corta' | 'larga'>('corta');
   const [copied, setCopied] = useState(false);
   const isHost = state.hostId === youId;
   const canStart = state.players.length >= MIN_PLAYERS;
@@ -128,17 +128,31 @@ export function Lobby({ state, youId, busy, act }: Props) {
 
       {isHost ? (
         <div className="space-y-3 rounded-2xl border border-white/15 bg-black/30 p-5">
-          <label className="block text-sm">
-            Rondas: <span className="font-bold text-amber-300">{rounds}</span>
-            <input
-              type="range"
-              min={1}
-              max={15}
-              value={rounds}
-              onChange={(e) => setRounds(Number(e.target.value))}
-              className="mt-2 w-full accent-amber-400"
-            />
-          </label>
+          <p className="text-sm text-white/70">Formato de la partida</p>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => setLength('corta')}
+              className={`rounded-lg border px-3 py-2 text-center transition ${
+                length === 'corta'
+                  ? 'border-amber-400 bg-amber-400/20'
+                  : 'border-white/15 bg-white/5 hover:bg-white/10'
+              }`}
+            >
+              <span className="block font-bold">Partida corta</span>
+              <span className="block text-xs text-white/55">8 manos + cierre sin triunfo</span>
+            </button>
+            <button
+              onClick={() => setLength('larga')}
+              className={`rounded-lg border px-3 py-2 text-center transition ${
+                length === 'larga'
+                  ? 'border-amber-400 bg-amber-400/20'
+                  : 'border-white/15 bg-white/5 hover:bg-white/10'
+              }`}
+            >
+              <span className="block font-bold">Partida larga</span>
+              <span className="block text-xs text-white/55">16 manos + 2 sin triunfo</span>
+            </button>
+          </div>
 
           <div className="flex gap-2">
             <button
@@ -149,7 +163,7 @@ export function Lobby({ state, youId, busy, act }: Props) {
               + Agregar bot
             </button>
             <button
-              onClick={() => act({ type: 'start', totalRounds: rounds })}
+              onClick={() => act({ type: 'start', gameLength: length })}
               disabled={busy || !canStart}
               className="flex-1 rounded-lg bg-amber-400 px-4 py-3 font-bold text-slate-900 hover:bg-amber-300 disabled:opacity-40"
             >

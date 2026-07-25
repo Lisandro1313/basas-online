@@ -59,7 +59,7 @@ export async function POST(
 
         case 'start':
           if (!isHost) throw new RuleError('Solo el anfitrión puede empezar la partida.');
-          startGame(draft, Number(body.totalRounds) || 8);
+          startGame(draft, body.gameLength === 'larga' ? 'larga' : 'corta');
           break;
 
         case 'bid':

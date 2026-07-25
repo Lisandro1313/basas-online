@@ -71,8 +71,12 @@ export interface RoomState {
   totalRounds: number;
   round: number;
   cardsThisRound: number;
-  /** Cuántas cartas toca en cada ronda. Se sortea al empezar la partida. */
+  /** Cuántas cartas toca en cada ronda (según el formato elegido). */
   roundCards: number[];
+  /** Rondas (1-based) que se juegan sin triunfo. */
+  noTrumpRounds: number[];
+  /** Formato elegido: partida corta o larga. null en modo legado (tests). */
+  gameLength: 'corta' | 'larga' | null;
   dealerIndex: number;
   turnIndex: number;
   trumpCard: Card | null;

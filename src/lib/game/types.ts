@@ -71,8 +71,14 @@ export interface RoomState {
   totalRounds: number;
   round: number;
   cardsThisRound: number;
-  /** Cuántas cartas toca en cada ronda (según el formato elegido). */
+  /** Cuántas cartas toca en cada ronda (ya topeadas por cantidad de jugadores). */
   roundCards: number[];
+  /**
+   * La serie base SIN topear. Se genera al empezar y no cambia: cuando entra o
+   * sale gente se re-topea desde acá, así el recálculo es correcto en ambos
+   * sentidos (con más jugadores baja, con menos vuelve a subir).
+   */
+  roundBase: number[];
   /** Rondas (1-based) que se juegan sin triunfo. */
   noTrumpRounds: number[];
   /** Formato elegido: partida corta o larga. null en modo legado (tests). */

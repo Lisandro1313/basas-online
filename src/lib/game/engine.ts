@@ -69,31 +69,26 @@ function findParticipant(state: RoomState, id: string): Player | undefined {
 const HAND_CAP = 8;
 
 /**
- * Formatos de partida. La secuencia es fija; los cierres marcados en `noTrump`
- * se juegan sin triunfo. Con muchos jugadores las cartas se topean por mazo.
+ * Serie base de un formato (SIN topear por jugadores).
  *
- * Corta: 8 manos + un cierre de 8 sin triunfo (9 en total).
- * Larga: la misma serie, la serie al revés, y dos cierres sin triunfo (18).
+ * Las manos numeradas salen en orden al azar (una baraja del 1 al 8) y cada
+ * bloque cierra con una mano de 8 sin triunfo.
+ *
+ * Corta: 8 manos al azar + un cierre sin triunfo (9 en total).
+ * Larga: dos bloques de 8 al azar, cada uno con su cierre sin triunfo (18).
  */
-const GAME_PRESETS: Record<'corta' | 'larga', { base: number[]; noTrump: number[] }> = {
-  corta: {
-    base: [2, 4, 1, 6, 8, 3, 7, 5, 8],
-    noTrump: [9],
-  },
-  larga: {
-    base: [2, 4, 1, 6, 8, 3, 7, 5, 8, 5, 7, 3, 8, 6, 1, 4, 2, 8],
-    noTrump: [9, 18],
-  },
-};
+function formatBase(length: 'corta' | 'larga'): { base: number[]; noTrump: number[] } {
+  const bloque = () => shuffle([1, 2, 3, 4, 5, 6, 7, 8]);
+  if (length === 'larga') {
+    return { base: [...bloque(), 8, ...bloque(), 8], noTrump: [9, 18] };
+  }
+  return { base: [...bloque(), 8], noTrump: [9] };
+}
 
-/** Plan de un formato, con las cartas topeadas según cuántos jugadores hay. */
-export function presetPlan(length: 'corta' | 'larga', playerCount: number) {
+/** Topea la serie base según cuántos jugadores hay (8 no entra con 7-8). */
+function capBase(base: number[], playerCount: number): number[] {
   const max = maxCardsPerRound(playerCount);
-  const preset = GAME_PRESETS[length];
-  return {
-    cards: preset.base.map((c) => Math.min(c, max)),
-    noTrump: [...preset.noTrump],
-  };
+  return base.map((c) => Math.min(c, max));
 }
 
 /**
@@ -152,6 +147,7 @@ export function createRoom(code: string, hostName: string, hostId: string, token
     name: `Mesa de ${hostName.trim().slice(0, 16) || 'alguien'}`,
     isPublic: true,
     gameId: null,
+    roundBase: [],
     noTrumpRounds: [],
     gameLength: null,
     hostId,
@@ -267,14 +263,14 @@ function reconcilePlayers(state: RoomState, fromRound: number) {
     state.pending = [];
   }
 
-  // 3. Rehacer las cartas de lo que falta para la nueva cantidad de jugadores.
-  // Con formato fijo se re-topea la misma serie; en modo legado se resortea.
-  const remaining = state.totalRounds - fromRound + 1;
-  if (remaining > 0 && state.players.length > 0) {
-    const fresh = state.gameLength
-      ? presetPlan(state.gameLength, state.players.length).cards.slice(fromRound - 1)
-      : buildRoundPlan(remaining, state.players.length);
-    state.roundCards = [...state.roundCards.slice(0, fromRound - 1), ...fresh];
+  // 3. Re-topear las manos que faltan para la nueva cantidad de jugadores,
+  // desde la serie base (misma serie/orden; solo cambia el tope). Así, si eran
+  // 6 y pasan a 7, el "8 sin muestra" y las que sigan bajan a 7, etc. Las manos
+  // ya jugadas quedan como estaban.
+  const base = state.roundBase?.length ? state.roundBase : state.roundCards;
+  if (base.length > 0 && state.players.length > 0) {
+    const recapped = capBase(base, state.players.length).slice(fromRound - 1);
+    state.roundCards = [...state.roundCards.slice(0, fromRound - 1), ...recapped];
   }
 }
 
@@ -510,14 +506,16 @@ export function startGame(state: RoomState, length: 'corta' | 'larga' | number) 
   if (typeof length === 'number') {
     // Modo legado (tests): plan aleatorio, última mano sin triunfo.
     state.totalRounds = Math.max(1, Math.min(20, Math.floor(length)));
-    state.roundCards = buildRoundPlan(state.totalRounds, state.players.length);
+    state.roundBase = buildRoundPlan(state.totalRounds, state.players.length);
+    state.roundCards = [...state.roundBase];
     state.noTrumpRounds = [state.totalRounds];
     state.gameLength = null;
   } else {
-    const plan = presetPlan(length, state.players.length);
-    state.roundCards = plan.cards;
-    state.noTrumpRounds = plan.noTrump;
-    state.totalRounds = plan.cards.length;
+    const { base, noTrump } = formatBase(length);
+    state.roundBase = base;
+    state.roundCards = capBase(base, state.players.length);
+    state.noTrumpRounds = noTrump;
+    state.totalRounds = base.length;
     state.gameLength = length;
   }
 

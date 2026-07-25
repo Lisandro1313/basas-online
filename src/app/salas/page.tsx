@@ -16,6 +16,17 @@ interface RoomSummary {
   updatedAt: number;
 }
 
+interface GameSummary {
+  id: string;
+  code: string;
+  name: string;
+  players: string[];
+  status: 'playing' | 'finished' | 'unfinished';
+  winner: string | null;
+  startedAt: number;
+  finishedAt: number | null;
+}
+
 const PHASE_LABEL: Record<string, string> = {
   lobby: 'Esperando jugadores',
   bidding: 'Apostando',
@@ -23,9 +34,19 @@ const PHASE_LABEL: Record<string, string> = {
   roundEnd: 'Contando puntos',
 };
 
+function cuando(ms: number): string {
+  const min = Math.floor((Date.now() - ms) / 60000);
+  if (min < 1) return 'recién';
+  if (min < 60) return `hace ${min} min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `hace ${h} h`;
+  return `hace ${Math.floor(h / 24)} d`;
+}
+
 export default function SalasPage() {
   const router = useRouter();
   const [rooms, setRooms] = useState<RoomSummary[] | null>(null);
+  const [games, setGames] = useState<GameSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState('');
 
@@ -33,10 +54,14 @@ export default function SalasPage() {
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch('/api/rooms/list', { cache: 'no-store' });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      setRooms(data.rooms);
+      const [rRes, gRes] = await Promise.all([
+        fetch('/api/rooms/list', { cache: 'no-store' }),
+        fetch('/api/games', { cache: 'no-store' }),
+      ]);
+      const rData = await rRes.json();
+      if (!rRes.ok) throw new Error(rData.error);
+      setRooms(rData.rooms);
+      if (gRes.ok) setGames((await gRes.json()).games);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudieron cargar las salas.');
@@ -145,6 +170,41 @@ export default function SalasPage() {
       <p className="text-center text-xs text-white/35">
         Las mesas sin actividad por 30 minutos dejan de aparecer.
       </p>
+
+      {/* Historial de partidas */}
+      {games && games.length > 0 && (
+        <details className="rounded-2xl border border-white/12 bg-black/30 p-4">
+          <summary className="cursor-pointer font-semibold text-white/80">
+            Historial de partidas ({games.length})
+          </summary>
+          <ul className="mt-3 space-y-2">
+            {games.map((g) => (
+              <li key={g.id} className="rounded-lg bg-white/5 px-3 py-2 text-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="truncate font-medium">{g.name}</span>
+                  <span className="shrink-0 text-xs text-white/40">
+                    {cuando(g.finishedAt ?? g.startedAt)}
+                  </span>
+                </div>
+                <p className="mt-0.5 text-xs">
+                  {g.status === 'finished' ? (
+                    <span className="text-emerald-300">🏆 Ganó {g.winner ?? '—'}</span>
+                  ) : g.status === 'unfinished' ? (
+                    <span className="text-white/45">No terminó</span>
+                  ) : (
+                    <span className="text-amber-300">En juego…</span>
+                  )}
+                </p>
+                {g.players.length > 0 && (
+                  <p className="mt-0.5 truncate text-xs text-white/45">
+                    {g.players.join(' · ')}
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
     </main>
   );
 }

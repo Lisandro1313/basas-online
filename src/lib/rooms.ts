@@ -64,6 +64,93 @@ const roomRef = (code: string) => adminDb().collection('rooms').doc(code.toUpper
 /** Doc público con solo el número de versión: es lo que escuchan los clientes. */
 const pulseRef = (code: string) => adminDb().collection('pulse').doc(code.toUpperCase());
 
+/**
+ * Registra en la colección `games` (que no se limpia con la sala) el arranque y
+ * el final de cada partida, para el historial. Corre dentro de la transacción
+ * de la sala, así queda atómico con el cambio de estado.
+ */
+function recordGameTransitions(
+  tx: FirebaseFirestore.Transaction,
+  before: RoomState,
+  after: RoomState,
+  now: number
+) {
+  const games = adminDb().collection('games');
+
+  // Arrancó una partida nueva (gameId nuevo).
+  if (after.gameId && after.gameId !== before.gameId) {
+    tx.set(games.doc(after.gameId), {
+      code: after.code,
+      name: after.name ?? `Sala ${after.code}`,
+      players: after.players.map((p) => p.name).slice(0, 8),
+      totalRounds: after.totalRounds,
+      startedAt: now,
+      updatedAt: now,
+      status: 'playing',
+      winner: null,
+    });
+  }
+
+  // Terminó la partida.
+  if (after.phase === 'gameOver' && before.phase !== 'gameOver' && after.gameId) {
+    const winner = after.players.find((p) => p.id === after.winnerId);
+    tx.set(
+      games.doc(after.gameId),
+      {
+        status: 'finished',
+        winner: winner?.name ?? null,
+        winnerPoints: winner?.points ?? null,
+        finishedAt: now,
+        updatedAt: now,
+      },
+      { merge: true }
+    );
+  }
+}
+
+export interface GameSummary {
+  id: string;
+  code: string;
+  name: string;
+  players: string[];
+  status: 'playing' | 'finished' | 'unfinished';
+  winner: string | null;
+  startedAt: number;
+  finishedAt: number | null;
+}
+
+/** Una partida "en juego" más vieja que esto se considera abandonada. */
+const GAME_STALE_MS = 90 * 60 * 1000;
+
+/** Historial de partidas, de la más nueva a la más vieja. */
+export async function listGames(limit = 25): Promise<GameSummary[]> {
+  const snap = await adminDb()
+    .collection('games')
+    .orderBy('startedAt', 'desc')
+    .limit(limit)
+    .get();
+
+  const now = Date.now();
+  return snap.docs.map((d) => {
+    const g = d.data();
+    let status: GameSummary['status'] = g.status === 'finished' ? 'finished' : 'playing';
+    // Si quedó "en juego" pero hace rato que no se toca, no terminó.
+    if (status === 'playing' && now - (g.updatedAt ?? g.startedAt ?? 0) > GAME_STALE_MS) {
+      status = 'unfinished';
+    }
+    return {
+      id: d.id,
+      code: g.code ?? '',
+      name: g.name ?? 'Sala',
+      players: g.players ?? [],
+      status,
+      winner: g.winner ?? null,
+      startedAt: g.startedAt ?? 0,
+      finishedAt: g.finishedAt ?? null,
+    };
+  });
+}
+
 export async function loadRoom(code: string): Promise<{ state: RoomState; version: number }> {
   const snap = await roomRef(code).get();
   if (!snap.exists) throw new NotFoundError('No existe esa sala.');
@@ -102,13 +189,15 @@ export async function mutateRoom(
   const ref = roomRef(code);
   const pulse = pulseRef(code);
 
-  return adminDb().runTransaction(async (tx) => {
+  const db = adminDb();
+  return db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     if (!snap.exists) throw new NotFoundError('No existe esa sala.');
 
     const doc = snap.data() as RoomDoc;
-    const draft = JSON.parse(doc.state) as RoomState;
+    const before = JSON.parse(doc.state) as RoomState;
 
+    const draft = JSON.parse(doc.state) as RoomState;
     mutate(draft);
 
     const version = doc.version + 1;
@@ -120,6 +209,9 @@ export async function mutateRoom(
       ...summary(draft),
     } satisfies RoomDoc);
     tx.set(pulse, { version, updatedAt });
+
+    // Historial de partidas (colección aparte, no se borra con la sala).
+    recordGameTransitions(tx, before, draft, updatedAt);
 
     return draft;
   });

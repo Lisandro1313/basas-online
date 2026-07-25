@@ -56,6 +56,8 @@ export interface RoomState {
   name: string;
   /** Si es pública aparece en la lista; si no, solo se entra con el código. */
   isPublic: boolean;
+  /** Id de la partida en curso, para el historial. null en el lobby. */
+  gameId: string | null;
   hostId: string;
   phase: Phase;
   players: Player[];

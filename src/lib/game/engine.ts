@@ -123,6 +123,7 @@ export function createRoom(code: string, hostName: string, hostId: string, token
     code,
     name: `Mesa de ${hostName.trim().slice(0, 16) || 'alguien'}`,
     isPublic: true,
+    gameId: null,
     hostId,
     phase: 'lobby',
     players: [],
@@ -478,6 +479,7 @@ export function startGame(state: RoomState, totalRounds: number) {
   state.dealerIndex = state.players.length - 1;
   state.players = state.players.map((p) => ({ ...p, points: 0 }));
   state.history = [];
+  state.gameId = crypto.randomUUID(); // identifica esta partida en el historial
   log(state, `¡Arranca la partida! ${state.totalRounds} rondas.`);
   startRound(state);
 }
@@ -786,6 +788,7 @@ export function playAgain(state: RoomState) {
   state.players = [...state.players, ...(state.pending ?? [])];
   state.pending = [];
   state.kicking = [];
+  state.gameId = null; // el historial de la partida anterior ya quedó cerrado
   // Se reinician las bazas y los puntos, pero se conservan las victorias (wins).
   state.players = state.players.map((p) => ({
     ...p,

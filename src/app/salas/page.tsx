@@ -34,6 +34,8 @@ const PHASE_LABEL: Record<string, string> = {
   roundEnd: 'Contando puntos',
 };
 
+const GAMES_PER_PAGE = 6;
+
 function cuando(ms: number): string {
   const min = Math.floor((Date.now() - ms) / 60000);
   if (min < 1) return 'recién';
@@ -47,6 +49,7 @@ export default function SalasPage() {
   const router = useRouter();
   const [rooms, setRooms] = useState<RoomSummary[] | null>(null);
   const [games, setGames] = useState<GameSummary[] | null>(null);
+  const [gamesPage, setGamesPage] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState('');
 
@@ -171,38 +174,70 @@ export default function SalasPage() {
         Las mesas sin actividad por 30 minutos dejan de aparecer.
       </p>
 
-      {/* Historial de partidas */}
+      {/* Historial de partidas, paginado para que no se estire */}
       {games && games.length > 0 && (
         <details className="rounded-2xl border border-white/12 bg-black/30 p-4">
           <summary className="cursor-pointer font-semibold text-white/80">
             Historial de partidas ({games.length})
           </summary>
-          <ul className="mt-3 space-y-2">
-            {games.map((g) => (
-              <li key={g.id} className="rounded-lg bg-white/5 px-3 py-2 text-sm">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="truncate font-medium">{g.name}</span>
-                  <span className="shrink-0 text-xs text-white/40">
-                    {cuando(g.finishedAt ?? g.startedAt)}
-                  </span>
-                </div>
-                <p className="mt-0.5 text-xs">
-                  {g.status === 'finished' ? (
-                    <span className="text-emerald-300">🏆 Ganó {g.winner ?? '—'}</span>
-                  ) : g.status === 'unfinished' ? (
-                    <span className="text-white/45">No terminó</span>
-                  ) : (
-                    <span className="text-amber-300">En juego…</span>
-                  )}
-                </p>
-                {g.players.length > 0 && (
-                  <p className="mt-0.5 truncate text-xs text-white/45">
-                    {g.players.join(' · ')}
-                  </p>
+
+          {(() => {
+            const pages = Math.max(1, Math.ceil(games.length / GAMES_PER_PAGE));
+            const page = Math.min(gamesPage, pages - 1);
+            const shown = games.slice(page * GAMES_PER_PAGE, page * GAMES_PER_PAGE + GAMES_PER_PAGE);
+            return (
+              <>
+                <ul className="mt-3 space-y-2">
+                  {shown.map((g) => (
+                    <li key={g.id} className="rounded-lg bg-white/5 px-3 py-2 text-sm">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="truncate font-medium">{g.name}</span>
+                        <span className="shrink-0 text-xs text-white/40">
+                          {cuando(g.finishedAt ?? g.startedAt)}
+                        </span>
+                      </div>
+                      <p className="mt-0.5 text-xs">
+                        {g.status === 'finished' ? (
+                          <span className="text-emerald-300">🏆 Ganó {g.winner ?? '—'}</span>
+                        ) : g.status === 'unfinished' ? (
+                          <span className="text-white/45">No terminó</span>
+                        ) : (
+                          <span className="text-amber-300">En juego…</span>
+                        )}
+                      </p>
+                      {g.players.length > 0 && (
+                        <p className="mt-0.5 truncate text-xs text-white/45">
+                          {g.players.join(' · ')}
+                        </p>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+
+                {pages > 1 && (
+                  <div className="mt-3 flex items-center justify-between text-sm">
+                    <button
+                      onClick={() => setGamesPage(page - 1)}
+                      disabled={page === 0}
+                      className="rounded-lg bg-white/10 px-3 py-1 hover:bg-white/20 disabled:opacity-30"
+                    >
+                      ← Anteriores
+                    </button>
+                    <span className="text-xs text-white/50">
+                      Página {page + 1} de {pages}
+                    </span>
+                    <button
+                      onClick={() => setGamesPage(page + 1)}
+                      disabled={page >= pages - 1}
+                      className="rounded-lg bg-white/10 px-3 py-1 hover:bg-white/20 disabled:opacity-30"
+                    >
+                      Siguientes →
+                    </button>
+                  </div>
                 )}
-              </li>
-            ))}
-          </ul>
+              </>
+            );
+          })()}
         </details>
       )}
     </main>

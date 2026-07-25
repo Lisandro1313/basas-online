@@ -123,7 +123,7 @@ export interface GameSummary {
 const GAME_STALE_MS = 90 * 60 * 1000;
 
 /** Historial de partidas, de la más nueva a la más vieja. */
-export async function listGames(limit = 25): Promise<GameSummary[]> {
+export async function listGames(limit = 60): Promise<GameSummary[]> {
   const snap = await adminDb()
     .collection('games')
     .orderBy('startedAt', 'desc')

@@ -165,7 +165,7 @@ export function GameTable({ state, youId, busy, act }: Props) {
     : 0;
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 p-3 pb-6" onPointerDown={unlockAudio}>
+    <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 p-3 pb-24" onPointerDown={unlockAudio}>
       {/* Destello dorado al empezar tu turno */}
       {flash && (
         <div

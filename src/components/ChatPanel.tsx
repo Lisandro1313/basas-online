@@ -200,7 +200,8 @@ export function ChatPanel({ state, youId, act }: Props) {
           clearUnread();
         }}
         aria-label="Abrir chat"
-        className="fixed bottom-3 left-3 z-50 flex h-12 w-12 items-center justify-center rounded-full bg-slate-800/90 text-2xl shadow-xl hover:bg-slate-700 lg:hidden"
+        className="fixed left-3 z-50 flex h-12 w-12 items-center justify-center rounded-full bg-slate-800/90 text-2xl shadow-xl hover:bg-slate-700 lg:hidden"
+        style={{ bottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
       >
         💬
         {unread > 0 && (

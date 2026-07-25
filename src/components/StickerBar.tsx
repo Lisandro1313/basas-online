@@ -55,7 +55,10 @@ export function StickerBar({ busy, myEmotes, act }: Props) {
         />
       )}
 
-      <div className="fixed right-3 bottom-3 z-50 flex flex-col items-end gap-2">
+      <div
+        className="fixed right-3 z-50 flex flex-col items-end gap-2"
+        style={{ bottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
+      >
         {open && (
           <div className="w-[min(90vw,22rem)] space-y-2 rounded-2xl border border-white/15 bg-slate-950/95 p-2 shadow-2xl">
             <div className="grid grid-cols-4 gap-1.5">

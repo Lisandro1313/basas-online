@@ -46,15 +46,16 @@ body {
   animation: deal-in 0.25s ease-out both;
 }
 
-/* Fundido suave al cambiar de pantalla (lobby, mesa, resumen…). */
+/* Fundido suave al cambiar de pantalla (lobby, mesa, resumen…).
+   Solo opacidad, sin transform: un transform (aunque sea translateY(0)) crea un
+   "containing block" y rompe el posicionado fixed de los hijos (vignettes de
+   turno, botones flotantes de chat/stickers). */
 @keyframes screen-in {
   from {
     opacity: 0;
-    transform: translateY(6px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
   }
 }
 

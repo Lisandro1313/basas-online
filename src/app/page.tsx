@@ -122,7 +122,7 @@ export default function Home() {
           Hecho por{' '}
           <span
             className="cursor-help text-white/55"
-            title="Manuel Elena de ReMotos, Dimitrukun y Lut"
+            title="Manuel Elena de ReMotos, Dimitrukun y Lut (gametesters)"
           >
             Lisandro Etcheverry y asociados
           </span>

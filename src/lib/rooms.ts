@@ -128,17 +128,31 @@ const GAME_STALE_MS = 90 * 60 * 1000;
 
 /** Historial de partidas, de la más nueva a la más vieja. */
 export async function listGames(limit = 60): Promise<GameSummary[]> {
-  const snap = await adminDb()
-    .collection('games')
-    .orderBy('startedAt', 'desc')
-    .limit(limit)
-    .get();
-
+  const db = adminDb();
   const now = Date.now();
+
+  // Partidas que están REALMENTE en curso: sala existente, activa y con
+  // actividad reciente. Una "en juego" que no está acá, no terminó.
+  const roomsSnap = await db
+    .collection('rooms')
+    .where('updatedAt', '>=', now - ABANDON_MS)
+    .get();
+  const live = new Set<string>();
+  for (const d of roomsSnap.docs) {
+    const r = d.data() as RoomDoc;
+    if (r.gameId && (r.phase === 'bidding' || r.phase === 'playing' || r.phase === 'roundEnd')) {
+      live.add(r.gameId);
+    }
+  }
+
+  const snap = await db.collection('games').orderBy('startedAt', 'desc').limit(limit).get();
+
   return snap.docs.map((d) => {
     const g = d.data();
     let status: GameSummary['status'] = g.status === 'finished' ? 'finished' : 'playing';
-    // Si quedó "en juego" pero hace rato que no se toca, no terminó.
+    // Sigue "en juego" solo si hay una sala viva con esta partida; si no, no terminó.
+    if (status === 'playing' && !live.has(d.id)) status = 'unfinished';
+    // Respaldo por tiempo, por las dudas.
     if (status === 'playing' && now - (g.updatedAt ?? g.startedAt ?? 0) > GAME_STALE_MS) {
       status = 'unfinished';
     }

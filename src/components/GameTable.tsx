@@ -391,8 +391,11 @@ export function GameTable({ state, youId, busy, act }: Props) {
       <details className="rounded-xl border border-white/10 bg-slate-950/60 px-4 py-2 text-sm">
         <summary className="cursor-pointer text-white/60">Historial de la mano</summary>
         <ul className="mt-2 space-y-0.5 text-white/70">
-          {state.log.map((line, i) => (
-            <li key={i}>{line}</li>
+          {/* Lo último arriba: se lee de arriba para abajo, lo más nuevo primero. */}
+          {[...state.log].reverse().map((line, i) => (
+            <li key={state.log.length - i} className={i === 0 ? 'font-medium text-white' : ''}>
+              {line}
+            </li>
           ))}
         </ul>
       </details>

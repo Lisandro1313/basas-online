@@ -40,9 +40,11 @@ interface RoomDoc {
   isPublic?: boolean;
   phase?: string;
   playerCount?: number;
+  humanCount?: number;
   playerNames?: string[];
   round?: number;
   totalRounds?: number;
+  gameId?: string | null;
 }
 
 /** Datos de la sala que se pueden listar sin exponer nada sensible. */
@@ -53,9 +55,11 @@ function summary(state: RoomState) {
     isPublic: state.isPublic ?? true,
     phase: state.phase,
     playerCount: players.length,
+    humanCount: players.filter((p) => !p.isBot).length,
     playerNames: players.map((p) => p.name).slice(0, 8),
     round: state.round,
     totalRounds: state.totalRounds,
+    gameId: state.gameId ?? null,
   };
 }
 
@@ -232,10 +236,63 @@ export interface RoomSummary {
 export const ROOM_IDLE_MS = 30 * 60 * 1000;
 
 /**
+ * Una partida activa sin escrituras por 5 min está abandonada: con cualquier
+ * cliente conectado se dispararían los timeouts/jugadas de bot cada ~30s, así
+ * que 5 min sin nada = nadie la está jugando.
+ */
+const ABANDON_MS = 5 * 60 * 1000;
+const ABANDON_PHASES = new Set(['bidding', 'playing']);
+
+/**
+ * Cierra por abandono y borra las salas que quedaron colgadas: partidas activas
+ * sin actividad (nadie humano jugando) y salas viejas ociosas. Corre de forma
+ * oportunista cuando alguien mira la lista de salas.
+ */
+async function cleanupStaleRooms() {
+  const db = adminDb();
+  const now = Date.now();
+  try {
+    const snap = await db
+      .collection('rooms')
+      .where('updatedAt', '<', now - ABANDON_MS)
+      .orderBy('updatedAt', 'asc')
+      .limit(20)
+      .get();
+    if (snap.empty) return;
+
+    const batch = db.batch();
+    let any = false;
+    for (const d of snap.docs) {
+      const doc = d.data() as RoomDoc;
+      const age = now - (doc.updatedAt ?? 0);
+      const abandonedGame = ABANDON_PHASES.has(doc.phase ?? '') && age >= ABANDON_MS;
+      const idle = age >= ROOM_IDLE_MS;
+      if (!abandonedGame && !idle) continue;
+
+      // Si había una partida en juego, la dejamos como "no terminó".
+      if (doc.gameId && (doc.phase === 'bidding' || doc.phase === 'playing' || doc.phase === 'roundEnd')) {
+        batch.set(
+          db.collection('games').doc(doc.gameId),
+          { status: 'unfinished', finishedAt: now, updatedAt: now },
+          { merge: true }
+        );
+      }
+      batch.delete(d.ref);
+      batch.delete(db.collection('pulse').doc(d.id));
+      any = true;
+    }
+    if (any) await batch.commit();
+  } catch {
+    // La limpieza es best-effort: si falla, la lista sigue funcionando.
+  }
+}
+
+/**
  * Lista las salas con actividad reciente, ordenadas por lo más nuevo.
  * Usa los campos asomados del documento, así no hace falta abrir cada estado.
  */
 export async function listRooms(limit = 30): Promise<RoomSummary[]> {
+  await cleanupStaleRooms(); // de paso, cerramos las mesas abandonadas
   const db = adminDb();
   const since = Date.now() - ROOM_IDLE_MS;
 

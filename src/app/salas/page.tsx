@@ -45,6 +45,17 @@ function cuando(ms: number): string {
   return `hace ${Math.floor(h / 24)} d`;
 }
 
+function fechaHora(ms: number): string {
+  if (!ms) return '';
+  return new Date(ms).toLocaleString('es-AR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
 export default function SalasPage() {
   const router = useRouter();
   const [rooms, setRooms] = useState<RoomSummary[] | null>(null);
@@ -210,6 +221,9 @@ export default function SalasPage() {
                           {g.players.join(' · ')}
                         </p>
                       )}
+                      <p className="mt-0.5 text-[11px] text-white/30">
+                        📅 {fechaHora(g.finishedAt ?? g.startedAt)}
+                      </p>
                     </li>
                   ))}
                 </ul>

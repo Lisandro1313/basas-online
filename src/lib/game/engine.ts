@@ -20,7 +20,8 @@ import {
   MIN_PLAYERS,
 } from './types';
 import { isValidSticker } from './stickers';
-import type { Card, Player, RoomState, RoundResult, Suit } from './types';
+import { genLine, type Tone } from './chatter';
+import type { BotStats, Card, Player, RoomState, RoundResult, Suit } from './types';
 
 /** Error de regla: el API lo traduce a un 400 con mensaje para el usuario. */
 export class RuleError extends Error {}
@@ -304,6 +305,52 @@ function randomOtherBot(state: RoomState, exceptId: string): Player | null {
   return otros.length ? otros[Math.floor(Math.random() * otros.length)] : null;
 }
 
+/** Tono de cada bot para el generador procedural. */
+const TONE: Record<string, Tone> = {
+  Beto: 'grumpy',
+  Carla: 'sweet',
+  Dani: 'cocky',
+  Elsa: 'drama',
+  Fito: 'chill',
+  Gaby: 'laughing',
+  Hugo: 'pessimist',
+  Ana: 'flirty',
+};
+const toneOf = (name: string): Tone => TONE[name] ?? 'chill';
+
+/** Empuja un mensaje de un bot respetando el enfriamiento. Devuelve si lo hizo. */
+function pushBotMsg(state: RoomState, botId: string, text: string): boolean {
+  const bot = state.players.find((p) => p.id === botId);
+  if (!bot || !bot.isBot || !text) return false;
+  const now = Date.now();
+  const ultima = [...state.messages].reverse().find((m) => m.playerId === botId);
+  if (ultima && now - ultima.at < 2500) return false;
+  state.messageSeq += 1;
+  state.messages.push({ seq: state.messageSeq, playerId: botId, name: bot.name, kind: 'text', text, at: now });
+  if (state.messages.length > MAX_MESSAGES) state.messages = state.messages.slice(-MAX_MESSAGES);
+  return true;
+}
+
+/** Un bot larga una frase GENERADA (procedural, con datos reales de la partida). */
+function botGen(
+  state: RoomState,
+  botId: string,
+  coreKey: string,
+  vars: Record<string, string | number>,
+  prob = 0.4
+) {
+  if (Math.random() > prob) return;
+  const bot = state.players.find((p) => p.id === botId);
+  if (!bot || !bot.isBot) return;
+  pushBotMsg(state, botId, genLine(toneOf(bot.name), coreKey, vars));
+}
+
+function statBucket(state: RoomState, id: string) {
+  const stats = state.botStats;
+  if (!stats.per[id]) stats.per[id] = { clavadas: 0, fallos: 0, bidHigh: 0, bidZero: 0 };
+  return stats.per[id];
+}
+
 /** Un bot le comenta a otro jugador (por nombre) según lo que hizo. */
 function botReact(state: RoomState, botId: string, evento: ReactEvento, targetName: string, prob = 0.4) {
   if (Math.random() > prob) return;
@@ -474,6 +521,7 @@ export function createRoom(code: string, hostName: string, hostId: string, token
     messages: [],
     messageSeq: 0,
     typing: {},
+    botStats: { streakId: null, streak: 0, per: {} },
     tokens: {},
   };
   addPlayer(state, hostId, hostName, token);
@@ -820,6 +868,7 @@ export function startGame(state: RoomState, length: 'corta' | 'larga' | number) 
   state.dealerIndex = state.players.length - 1;
   state.players = state.players.map((p) => ({ ...p, points: 0 }));
   state.history = [];
+  state.botStats = { streakId: null, streak: 0, per: {} }; // memoria fresca por partida
   state.gameId = crypto.randomUUID(); // identifica esta partida en el historial
   log(state, `¡Arranca la partida! ${state.totalRounds} manos.`);
   // Los bots saludan a su manera al arrancar.
@@ -914,6 +963,23 @@ export function placeBid(state: RoomState, playerId: string, bid: number) {
   player.bid = bid;
   log(state, `${player.name} pidió ${bid}.`);
 
+  // Memoria de tendencias: quién siempre pide alto / siempre cero. Cuando se
+  // repite, un bot lo señala (funciona para bots y para vos).
+  const bucket = statBucket(state, playerId);
+  if (bid === 0) {
+    bucket.bidZero += 1;
+    if (bucket.bidZero >= 3) {
+      const b = randomOtherBot(state, playerId);
+      if (b) botGen(state, b.id, 'bidZeroAlways', { n: player.name }, 0.4);
+    }
+  } else if (bid >= Math.ceil(state.cardsThisRound / 2)) {
+    bucket.bidHigh += 1;
+    if (bucket.bidHigh >= 3) {
+      const b = randomOtherBot(state, playerId);
+      if (b) botGen(state, b.id, 'bidHigh', { n: player.name }, 0.4);
+    }
+  }
+
   if (bidsPlaced(state) === state.players.length) {
     state.phase = 'playing';
     state.turnIndex = (state.dealerIndex + 1) % state.players.length;
@@ -976,11 +1042,24 @@ function resolveTrick(state: RoomState) {
   const perdedorBot = state.players.find((p) => p.isBot && p.id !== winnerId);
   if (perdedorBot) botChatter(state, perdedorBot.id, 'pierdeBaza', 0.22);
 
+  // Memoria: racha de bazas al hilo.
+  const stats = state.botStats;
+  if (stats.streakId === winnerId) stats.streak += 1;
+  else {
+    stats.streakId = winnerId;
+    stats.streak = 1;
+  }
+
   // Devolución: un bot le comenta al que ganó, por su nombre. Más probable si
   // ganó un humano, para que sientas que te siguen la jugada.
   const comentarista = randomOtherBot(state, winnerId);
   if (comentarista) {
-    botReact(state, comentarista.id, 'ganoOtro', winner.name, winner.isBot ? 0.28 : 0.6);
+    // Si hay racha, un comentario GENERADO sobre la racha; si no, la reacción normal.
+    if (stats.streak >= 2) {
+      botGen(state, comentarista.id, 'streak', { n: winner.name, k: stats.streak }, 0.55);
+    } else {
+      botReact(state, comentarista.id, 'ganoOtro', winner.name, winner.isBot ? 0.28 : 0.6);
+    }
   }
 
   state.trick = [];
@@ -1018,15 +1097,28 @@ function scoreRound(state: RoomState) {
   state.phase = 'roundEnd';
   log(state, `Fin de la ronda ${state.round}.`);
 
-  // Devoluciones de fin de mano: felicitan al que clavó, cargan al que erró y
-  // marcan al que lidera. El enfriamiento evita que se amontonen.
+  // Memoria: contamos clavadas y fallos de la partida.
+  for (const r of results) {
+    const bucket = statBucket(state, r.playerId);
+    if (r.tricks === r.bid) bucket.clavadas += 1;
+    else if (Math.abs(r.tricks - r.bid) >= 2) bucket.fallos += 1;
+  }
+
+  // Devoluciones de fin de mano: felicitan al que clavó (y si ya lo hizo varias
+  // veces, una frase generada más picante), cargan al que erró y marcan al líder.
   const clavaron = results.filter((r) => r.tricks === r.bid);
   const fallaron = results.filter((r) => Math.abs(r.tricks - r.bid) >= 2);
   if (clavaron.length) {
     const r = pick(clavaron);
     const j = state.players.find((p) => p.id === r.playerId)!;
     const b = randomOtherBot(state, r.playerId);
-    if (b) botReact(state, b.id, 'clavo', j.name, 0.5);
+    if (b) {
+      if (statBucket(state, r.playerId).clavadas >= 2) {
+        botGen(state, b.id, 'clavoOtra', { n: j.name }, 0.6);
+      } else {
+        botReact(state, b.id, 'clavo', j.name, 0.5);
+      }
+    }
   }
   if (fallaron.length) {
     const r = pick(fallaron);
@@ -1038,7 +1130,7 @@ function scoreRound(state: RoomState) {
     const lider = [...state.players].sort((a, b) => b.points - a.points)[0];
     if (lider) {
       const b = randomOtherBot(state, lider.id);
-      if (b) botReact(state, b.id, 'lidera', lider.name, 0.3);
+      if (b) botGen(state, b.id, 'lead', { n: lider.name }, 0.3);
     }
   }
 }

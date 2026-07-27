@@ -121,8 +121,18 @@ export interface RoomState {
   messageSeq: number;
   /** Quién está escribiendo: id → hasta cuándo (epoch ms). Efímero. */
   typing: Record<string, number>;
+  /** Memoria de la partida para las devoluciones de los bots (rachas, tendencias). */
+  botStats: BotStats;
   /** Secreto por jugador. Nunca sale del servidor: se borra al redactar. */
   tokens: Record<string, string>;
+}
+
+export interface BotStats {
+  /** Quién viene ganando bazas al hilo y cuántas. */
+  streakId: string | null;
+  streak: number;
+  /** Contadores por jugador a lo largo de la partida. */
+  per: Record<string, { clavadas: number; fallos: number; bidHigh: number; bidZero: number }>;
 }
 
 export interface Reaction {

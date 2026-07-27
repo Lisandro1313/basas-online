@@ -25,7 +25,205 @@ import type { Card, Player, RoomState, RoundResult, Suit } from './types';
 /** Error de regla: el API lo traduce a un 400 con mensaje para el usuario. */
 export class RuleError extends Error {}
 
-const BOT_NAMES = ['Beto', 'Carla', 'Dani', 'Elsa', 'Fito', 'Gaby', 'Hugo'];
+const BOT_NAMES = ['Beto', 'Carla', 'Dani', 'Elsa', 'Fito', 'Gaby', 'Hugo', 'Ana'];
+
+type Evento =
+  | 'saludo'
+  | 'bidAlto'
+  | 'bidCero'
+  | 'ganaBaza'
+  | 'pierdeBaza'
+  | 'ganaJuego'
+  | 'pierdeJuego'
+  | 'relleno';
+
+interface Persona {
+  voice: 'm' | 'f';
+  lines: Record<Evento, string[]>;
+}
+
+/**
+ * Cada bot tiene su personalidad y sus frases propias (banter de mesa de cartas).
+ * El cliente las lee en voz alta con TTS según su voz (hombre/mujer).
+ */
+const PERSONAS: Record<string, Persona> = {
+  // Resongón
+  Beto: {
+    voice: 'm',
+    lines: {
+      saludo: ['Otra vez a jugar… bueno 😒', 'Dale, repartí de una vez 😤'],
+      bidAlto: ['Voy, pero no me gusta 😤', 'Pido alto y que sea rápido'],
+      bidCero: ['Cero, estas cartas son un desastre 😒', 'Nada, como siempre me toca lo peor'],
+      ganaBaza: ['Era hora 😤', 'Por fin una'],
+      pierdeBaza: ['Obvio, siempre yo 😩', 'Qué manera de robar…'],
+      ganaJuego: ['Gané y ni contento estoy 😒', 'Ya era hora, che'],
+      pierdeJuego: ['Sabía que iba a perder 😤', 'Esto está arreglado 😩'],
+      relleno: ['¿Van a tardar mucho? 😒', 'Qué juego lento…'],
+    },
+  },
+  // Amorosa
+  Carla: {
+    voice: 'f',
+    lines: {
+      saludo: ['¡Holis a todos! ❤️', 'Qué lindo jugar con ustedes 🥰'],
+      bidAlto: ['Voy con fe y con amor 💕', 'Pido alto, corazones 💖'],
+      bidCero: ['Cero, pero igual los quiero 🥰', '¡Suerte a todos! 💗'],
+      ganaBaza: ['¡Ay, gané! 🥰', 'Gracias, mis amores 💞'],
+      pierdeBaza: ['No importa, jugaron divino 💕', 'Bien ahí 🥰'],
+      ganaJuego: ['¡Gané, amores! 🏆❤️', 'Los quiero igual 💖'],
+      pierdeJuego: ['Perdí pero me divertí 🥰', 'La próxima con más amor 💕'],
+      relleno: ['Qué linda mesa hoy 🥰', 'Me encanta jugar con ustedes 💖'],
+    },
+  },
+  // Canchero
+  Dani: {
+    voice: 'm',
+    lines: {
+      saludo: ['Llegó el que sabe 😎', 'Preparen la derrota 😏'],
+      bidAlto: ['Obvio que voy alto 😎', 'Miren y aprendan'],
+      bidCero: ['Cero, me reservo pa\' después 😏'],
+      ganaBaza: ['Fácil 😎', 'Ni la vieron'],
+      pierdeBaza: ['Te la dejé, tranqui 😏', 'Calentando nomás'],
+      ganaJuego: ['¿Alguien dudaba? 😎🏆', 'Clase magistral'],
+      pierdeJuego: ['Me distraje, va de nuevo 😏'],
+      relleno: ['Esto es muy fácil 😎', 'Gano igual, jueguen tranquilos'],
+    },
+  },
+  // Dramática
+  Elsa: {
+    voice: 'f',
+    lines: {
+      saludo: ['¡No puedo con los nervios! 😱'],
+      bidAlto: ['¡Me juego la vida! 😱', 'Todo o nada 😰'],
+      bidCero: ['Cero, no soporto la presión 😰'],
+      ganaBaza: ['¡No lo puedo creer! 😱', '¡Ayyy gané! 🙌'],
+      pierdeBaza: ['¡Nooo! 😭', '¡Qué tragedia! 😱'],
+      ganaJuego: ['¡ES UN MILAGRO! 😱🏆'],
+      pierdeJuego: ['¡Estoy destruida! 😭'],
+      relleno: ['¡Qué tensión! 😰', 'No miro, no miro 🙈'],
+    },
+  },
+  // Tranqui
+  Fito: {
+    voice: 'm',
+    lines: {
+      saludo: ['Tranca, buenas 😌'],
+      bidAlto: ['Voy piola, alto 😌'],
+      bidCero: ['Cero, sin drama 😌'],
+      ganaBaza: ['Ahí está 😌', 'Todo fluye'],
+      pierdeBaza: ['Nah, tranqui 😌', 'Se da, se da'],
+      ganaJuego: ['Gané, qué grande 😎'],
+      pierdeJuego: ['Perdí, no pasa nada 😌'],
+      relleno: ['Qué paz esta mesa 😌', 'Todo bien por acá'],
+    },
+  },
+  // Risueña
+  Gaby: {
+    voice: 'f',
+    lines: {
+      saludo: ['¡Buenas jaja! 😂'],
+      bidAlto: ['Voy alto, jaja qué locura 😆'],
+      bidCero: ['Cero, me mató la mano 🤣'],
+      ganaBaza: ['¡Jaja mía! 😂', 'Ni yo lo esperaba 🤣'],
+      pierdeBaza: ['Jaja me la afanaron 😆'],
+      ganaJuego: ['¡Gané jajaja! 😂🏆'],
+      pierdeJuego: ['Perdí y me río igual 🤣'],
+      relleno: ['Jaja qué desastre esta mano 😆', 'Me divierto igual jaja'],
+    },
+  },
+  // Pesimista
+  Hugo: {
+    voice: 'm',
+    lines: {
+      saludo: ['Uf, otra derrota en camino 😮‍💨'],
+      bidAlto: ['Voy alto pero ya sé que pierdo 😮‍💨'],
+      bidCero: ['Cero, total no gano nunca'],
+      ganaBaza: ['¿Gané? Raro 😮‍💨'],
+      pierdeBaza: ['Obvio que la perdí 😞'],
+      ganaJuego: ['¿Gané? No me lo creo 😮‍💨'],
+      pierdeJuego: ['Lo sabía… 😞'],
+      relleno: ['Esto va a salir mal 😮‍💨', 'No tengo fe'],
+    },
+  },
+  // Coqueta (piropos picantes, con gracia)
+  Ana: {
+    voice: 'f',
+    lines: {
+      saludo: ['Hola, guapos… ¿jugamos? 😏', 'Llegó la que te va a distraer 😘'],
+      bidAlto: ['Voy con todo, como me gusta 😏', 'Alto, igual que mis expectativas con vos 😘'],
+      bidCero: ['Cero… por ahora 😉'],
+      ganaBaza: [
+        'Con esa suerte, esta noche me voy con vos 😏',
+        'Uy, me encanta cómo jugás 😘',
+        'Gano yo… ¿lo festejamos después? 😉',
+      ],
+      pierdeBaza: ['Dejámela ganar y after te invito algo 😏', 'Me ganaste… me gusta un desafío 😘'],
+      ganaJuego: ['Gané yo, lindo. Vos ganás mi atención 😏🏆'],
+      pierdeJuego: ['Perdí, pero me llevo tu mirada 😘'],
+      relleno: ['¿Venís seguido a esta mesa? 😏', 'Me estás distrayendo, guapo 😉'],
+    },
+  },
+};
+
+function pick<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+const FALLBACK_PERSONA: Persona = PERSONAS.Fito;
+
+/** Stickers que un bot puede tirar según el momento. */
+const BOT_STICKERS: Partial<Record<Evento, string[]>> = {
+  ganaBaza: ['aplauso', 'risa-trebol', 'e-fuego'],
+  pierdeBaza: ['enojo', 'e-calavera'],
+  ganaJuego: ['aplauso', 'e-corona'],
+  pierdeJuego: ['enojo', 'e-pensando'],
+  saludo: ['saludo'],
+};
+
+/**
+ * Un bot "habla": con cierta probabilidad manda una frase de SU personalidad al
+ * chat y/o tira un sticker, sin spamear (enfriamiento por bot).
+ */
+function botChatter(state: RoomState, botId: string, evento: Evento, prob = 0.5) {
+  const bot = state.players.find((p) => p.id === botId);
+  if (!bot || !bot.isBot) return;
+  if (Math.random() > prob) return;
+
+  const now = Date.now();
+  const ultima = [...state.messages].reverse().find((m) => m.playerId === botId);
+  if (ultima && now - ultima.at < 4000) return; // enfriamiento: no repite muy seguido
+
+  const persona = PERSONAS[bot.name] ?? FALLBACK_PERSONA;
+  const opciones = persona.lines[evento] ?? [];
+  if (opciones.length === 0) return;
+
+  state.messageSeq += 1;
+  state.messages.push({
+    seq: state.messageSeq,
+    playerId: botId,
+    name: bot.name,
+    kind: 'text',
+    text: pick(opciones),
+    at: now,
+  });
+  if (state.messages.length > MAX_MESSAGES) state.messages = state.messages.slice(-MAX_MESSAGES);
+
+  // A veces además tira un sticker.
+  const stickers = BOT_STICKERS[evento];
+  if (stickers && Math.random() < 0.5) {
+    state.reactionSeq += 1;
+    state.reactions.push({ seq: state.reactionSeq, playerId: botId, sticker: pick(stickers), at: now });
+    if (state.reactions.length > MAX_REACTIONS) state.reactions = state.reactions.slice(-MAX_REACTIONS);
+  }
+}
+
+/** El bot apuesta y, a veces, comenta según lo que pidió. */
+function botDoBid(state: RoomState, player: Player) {
+  const bid = botBid(state, player);
+  placeBid(state, player.id, bid);
+  if (bid === 0) botChatter(state, player.id, 'bidCero', 0.3);
+  else if (bid >= Math.ceil(state.cardsThisRound / 2)) botChatter(state, player.id, 'bidAlto', 0.3);
+}
 
 /** Segundos que tiene cada jugador para mover antes de que juegue solo. */
 export const TURN_SECONDS = 30;
@@ -205,6 +403,7 @@ export function addPlayer(state: RoomState, id: string, name: string, token: str
     id,
     name: clean,
     isBot: false,
+    voice: null,
     avatar: null,
     emotes: [],
     hand: [],
@@ -465,6 +664,7 @@ export function addBot(state: RoomState) {
     id: `bot-${Math.random().toString(36).slice(2, 8)}`,
     name,
     isBot: true,
+    voice: (PERSONAS[name] ?? FALLBACK_PERSONA).voice,
     avatar: `emoji:${AVATAR_EMOJIS[state.players.length % AVATAR_EMOJIS.length]}`,
     emotes: [],
     hand: [],
@@ -525,6 +725,10 @@ export function startGame(state: RoomState, length: 'corta' | 'larga' | number) 
   state.history = [];
   state.gameId = crypto.randomUUID(); // identifica esta partida en el historial
   log(state, `¡Arranca la partida! ${state.totalRounds} manos.`);
+  // Los bots saludan a su manera al arrancar.
+  for (const p of state.players) {
+    if (p.isBot) botChatter(state, p.id, 'saludo', 0.6);
+  }
   startRound(state);
 }
 
@@ -541,6 +745,10 @@ export function startRound(state: RoomState) {
     state.winnerId = best.id;
     if (best) best.wins = (best.wins ?? 0) + 1; // marcador acumulado de la sala
     log(state, `Fin del juego. Ganó ${best.name} con ${best.points} puntos.`);
+    // Los bots cierran: el ganador festeja, los demás se lamentan.
+    for (const p of state.players) {
+      if (p.isBot) botChatter(state, p.id, p.id === best.id ? 'ganaJuego' : 'pierdeJuego', 0.8);
+    }
     return;
   }
 
@@ -662,6 +870,11 @@ function resolveTrick(state: RoomState) {
   state.lastTrick = { cards: [...state.trick], winnerId, seq: state.trickSeq };
   log(state, `${winner.name} se llevó la baza.`);
 
+  // Los bots comentan: el ganador festeja, alguno de los otros se queja.
+  if (winner.isBot) botChatter(state, winner.id, 'ganaBaza', 0.35);
+  const perdedorBot = state.players.find((p) => p.isBot && p.id !== winnerId);
+  if (perdedorBot) botChatter(state, perdedorBot.id, 'pierdeBaza', 0.18);
+
   state.trick = [];
   state.leadSuit = null;
   state.turnIndex = state.players.findIndex((p) => p.id === winnerId);
@@ -758,7 +971,7 @@ export function applyBotMove(state: RoomState) {
   }
 
   if (state.phase === 'bidding') {
-    placeBid(state, player.id, botBid(state, player));
+    botDoBid(state, player);
   } else {
     playCard(state, player.id, botCard(state, player).id);
   }
@@ -810,7 +1023,7 @@ export function applyTimeout(state: RoomState) {
 
   log(state, `${player.name} se quedó sin tiempo.`);
   if (state.phase === 'bidding') {
-    placeBid(state, player.id, botBid(state, player));
+    botDoBid(state, player);
   } else {
     playCard(state, player.id, botCard(state, player).id);
   }
@@ -908,7 +1121,7 @@ export function runBots(state: RoomState) {
     state.trickPauseUntil = null;
 
     if (state.phase === 'bidding') {
-      placeBid(state, player.id, botBid(state, player));
+      botDoBid(state, player);
     } else {
       playCard(state, player.id, botCard(state, player).id);
     }

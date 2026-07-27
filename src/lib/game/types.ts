@@ -13,6 +13,8 @@ export interface Player {
   id: string;
   name: string;
   isBot: boolean;
+  /** Voz del bot para el TTS: 'm' hombre, 'f' mujer. null en humanos. */
+  voice: 'm' | 'f' | null;
   /**
    * Avatar: o `emoji:🦊`, o una foto como data URL ya reducida en el navegador.
    * null = se muestra la inicial del nombre.

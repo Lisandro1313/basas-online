@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Avatar } from './Avatar';
 import { sndChat, unlockAudio } from '@/lib/client/audio';
+import { botVoicesOn, setBotVoices, speakBot, warmUpVoices } from '@/lib/client/tts';
 import { cloudinaryEnabled, uploadChatImage } from '@/lib/client/cloudinary';
 import { MAX_MESSAGE_CHARS } from '@/lib/game/types';
 import type { PublicState } from '@/lib/game/redact';
@@ -22,6 +23,18 @@ export function ChatPanel({ state, youId, act }: Props) {
   const [text, setText] = useState('');
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [voices, setVoices] = useState(true);
+
+  useEffect(() => {
+    warmUpVoices();
+    setVoices(botVoicesOn());
+  }, []);
+
+  const toggleVoices = () => {
+    const next = !voices;
+    setVoices(next);
+    setBotVoices(next);
+  };
 
   const messages = state.messages ?? [];
   const listRef = useRef<HTMLDivElement>(null);
@@ -42,6 +55,15 @@ export function ChatPanel({ state, youId, act }: Props) {
     if (nuevos.length) {
       sndChat();
       if (!open && !isDesktopOpen()) setUnread((n) => n + nuevos.length);
+      // Los bots hablan: leemos sus frases con su voz (una sola a la vez).
+      const deBot = nuevos.find((m) => {
+        const p = state.players.find((x) => x.id === m.playerId);
+        return m.kind === 'text' && p?.isBot && p.voice;
+      });
+      if (deBot) {
+        const p = state.players.find((x) => x.id === deBot.playerId);
+        if (p?.voice) speakBot(deBot.text ?? '', p.voice);
+      }
     }
     seenSeq.current = lastSeq;
   }, [lastSeq]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -187,8 +209,15 @@ export function ChatPanel({ state, youId, act }: Props) {
     <>
       {/* Desktop: panel fijo a la izquierda */}
       <aside className="fixed top-1/2 left-3 z-30 hidden h-[70vh] w-72 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-white/12 bg-slate-950/85 shadow-2xl backdrop-blur lg:flex">
-        <header className="border-b border-white/10 px-3 py-2 text-sm font-semibold text-white/80">
+        <header className="flex items-center justify-between border-b border-white/10 px-3 py-2 text-sm font-semibold text-white/80">
           Chat de la sala
+          <button
+            onClick={toggleVoices}
+            title={voices ? 'Silenciar voces de los bots' : 'Activar voces de los bots'}
+            className={`rounded px-1.5 py-0.5 ${voices ? 'text-amber-300' : 'text-white/30'}`}
+          >
+            🗣️
+          </button>
         </header>
         {body}
       </aside>
@@ -220,7 +249,16 @@ export function ChatPanel({ state, youId, act }: Props) {
           />
           <div className="relative flex h-[75vh] flex-col overflow-hidden rounded-t-2xl border-t border-white/15 bg-slate-950">
             <header className="flex items-center justify-between border-b border-white/10 px-3 py-2 text-sm font-semibold text-white/80">
-              Chat de la sala
+              <span className="flex items-center gap-2">
+                Chat de la sala
+                <button
+                  onClick={toggleVoices}
+                  title={voices ? 'Silenciar voces de los bots' : 'Activar voces de los bots'}
+                  className={`rounded px-1 ${voices ? 'text-amber-300' : 'text-white/30'}`}
+                >
+                  🗣️
+                </button>
+              </span>
               <button onClick={() => setOpen(false)} className="px-2 text-white/60">
                 ✕
               </button>

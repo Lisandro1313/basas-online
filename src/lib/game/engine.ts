@@ -226,10 +226,11 @@ function botDoBid(state: RoomState, player: Player) {
   else if (bid >= Math.ceil(state.cardsThisRound / 2)) botChatter(state, player.id, 'bidAlto', 0.35);
 }
 
-/** El bot juega su carta y, a veces, larga un comentario al pasar. */
+/** El bot juega su carta y, a veces, larga un comentario o algo de ambiente. */
 function botDoPlay(state: RoomState, player: Player) {
   playCard(state, player.id, botCard(state, player).id);
-  botChatter(state, player.id, 'relleno', 0.14);
+  botChatter(state, player.id, 'relleno', 0.12);
+  botAmbiente(state, player.id);
 }
 
 /**
@@ -250,6 +251,67 @@ const BOT_REPLIES = [
   'tranqui campeón 😎',
   'esa no te la creo 😏',
   '¿cómo te pusiste esos jeans? 👖😏',
+];
+
+// Cuando alguien no tiene el palo y tiene que "saltar" (tirar otra cosa).
+const SALTO_GENERAL = [
+  'apaaa, saltó {n} 🐔',
+  'picó {n}, no tenía nada',
+  'tuvo que saltar {n}',
+  'saltó el pollo 🐔',
+  '¿cuántos perros te quedan, {n}? 🐶',
+  'se quedó sin palo {n} 😅',
+  'uh, {n} no tenía y saltó',
+];
+const SALTO_TRIUNFO = [
+  '¡{n} mató con triunfo! 🔥',
+  'ojo que {n} saltó con muestra 😱',
+  '{n} sacó el triunfo, picante',
+];
+const SALTO_DESCARTE = [
+  '{n} descartando lo peor 😂',
+  'chau basura, tiró {n}',
+  '{n} se saca los perros de encima 🐶',
+];
+
+// Charla de ambiente (comentarios sueltos, para dar clima de mesa).
+const AMBIENTE = [
+  'unas ganas de un cigarrillo 🚬',
+  'qué hambre tengo, che 😋',
+  'unas ganas de salir a la noche...',
+  'me tomaría unos mates 🧉',
+  'después de esta, birra 🍺',
+  'qué sueño tengo 😴',
+  'ganas de pizza 🍕',
+  'qué calor hoy eh',
+  'me estoy quedando dormido acá',
+  'unas ganas de parrandear 🎉',
+  'necesito un café ya ☕',
+  'tengo la garganta seca',
+];
+
+// Dichos y refranes argentinos (folclóricos) para darle color a la mesa.
+const DICHOS = [
+  'al pan, pan, y al vino... Toro 🍷',
+  'el que no llora, no mama',
+  'camarón que se duerme, se lo lleva la corriente 🦐',
+  'más vale pájaro en mano que cien volando 🐦',
+  'el que ríe último, ríe mejor 😏',
+  'perro que ladra no muerde 🐶',
+  'el que quiere celeste, que le cueste',
+  'éramos pocos y parió la abuela 👵',
+  'acá se pudrió todo 😂',
+  'esto está más picante que chori con criolla 🌶️',
+  'el horno no está para bollos',
+  'zapatero a tus zapatos 👞',
+  'la suerte está echada 🎲',
+  'no hay mal que por bien no venga',
+  'a caballo regalado no se le miran los dientes 🐴',
+  'estamos para el arrastre 😩',
+  'el que avisa no traiciona ✋',
+  'quien mucho abarca, poco aprieta',
+  'a las cartas y al amor, por un pelo se pierde 🃏',
+  'de este pan comeré, dijo y no cumplió',
 ];
 
 function botBanter(state: RoomState, exceptId: string, prob = 0.35) {
@@ -349,6 +411,26 @@ function statBucket(state: RoomState, id: string) {
   const stats = state.botStats;
   if (!stats.per[id]) stats.per[id] = { clavadas: 0, fallos: 0, bidHigh: 0, bidZero: 0 };
   return stats.per[id];
+}
+
+/** Cuando alguien "salta" (no tenía el palo), un bot lo carga. */
+function botSalto(state: RoomState, playerId: string, card: Card) {
+  const player = state.players.find((p) => p.id === playerId);
+  if (!player) return;
+  const b = randomOtherBot(state, playerId);
+  if (!b) return;
+  let bank = SALTO_GENERAL;
+  if (Math.random() < 0.6) {
+    bank = card.suit === state.trumpSuit ? SALTO_TRIUNFO : SALTO_DESCARTE;
+  }
+  pushBotMsg(state, b.id, pick(bank).split('{n}').join(player.name));
+}
+
+/** Comentario de ambiente suelto: clima de mesa o un dicho argentino. */
+function botAmbiente(state: RoomState, botId: string, prob = 0.07) {
+  if (Math.random() > prob) return;
+  // Mitad clima (hambre, birra…), mitad refrán argentino.
+  pushBotMsg(state, botId, pick(Math.random() < 0.5 ? AMBIENTE : DICHOS));
 }
 
 /** Un bot le comenta a otro jugador (por nombre) según lo que hizo. */
@@ -1012,10 +1094,16 @@ export function playCard(state: RoomState, playerId: string, cardId: string) {
     );
   }
 
+  // "Salto": había un palo de salida y esta carta es de otro palo (no lo tenía).
+  const leadBefore = state.trick.length > 0 ? state.leadSuit : null;
+  const esSalto = leadBefore !== null && card.suit !== leadBefore;
+
   player.hand.splice(index, 1);
   state.trick.push({ card, playerId });
   if (state.trick.length === 1) state.leadSuit = card.suit;
   log(state, `${player.name} jugó ${valueLabel(card.value)} de ${SUIT_NAME[card.suit]}.`);
+
+  if (esSalto && Math.random() < 0.55) botSalto(state, playerId, card);
 
   if (state.trick.length === state.players.length) {
     resolveTrick(state);

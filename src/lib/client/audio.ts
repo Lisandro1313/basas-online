@@ -24,6 +24,15 @@ let wet: GainNode | null = null;
 let musicGain: GainNode | null = null;
 let musicTimer: ReturnType<typeof setInterval> | null = null;
 
+// Música de fondo: archivo propio. Se sirve desde una URL externa (release de
+// GitHub) para no inflar el repo. Configurable por env; si falla, cae a la
+// música sintetizada de más abajo.
+const MUSIC_URL =
+  process.env.NEXT_PUBLIC_MUSIC_URL ||
+  'https://github.com/Lisandro1313/basas-online/releases/download/music-v1/theme.m4a';
+let musicEl: HTMLAudioElement | null = null;
+let musicFade: ReturnType<typeof setInterval> | null = null;
+
 const PREFS = { sfx: 'basas:sfx', music: 'basas:music' };
 
 export function prefEnabled(kind: 'sfx' | 'music'): boolean {
@@ -500,7 +509,56 @@ function timpani(freq: number, when: number, gainValue: number) {
  * sostenidas de fondo, un timbal al entrar, arpa en cascada y la melodía de
  * metal encima. La melodía varía un poco cada vuelta, así no se vuelve repetitiva.
  */
+/** Fundido de volumen del elemento de audio (in/out) sin cortes bruscos. */
+function fadeAudioEl(el: HTMLAudioElement, to: number, ms: number, done?: () => void) {
+  if (musicFade) clearInterval(musicFade);
+  const from = el.volume;
+  const steps = Math.max(1, Math.round(ms / 60));
+  let i = 0;
+  musicFade = setInterval(() => {
+    i++;
+    el.volume = Math.min(1, Math.max(0, from + (to - from) * (i / steps)));
+    if (i >= steps) {
+      if (musicFade) clearInterval(musicFade);
+      musicFade = null;
+      done?.();
+    }
+  }, 60);
+}
+
+/**
+ * Música de fondo: reproduce el archivo propio (streamea progresivo, no espera a
+ * bajarlo entero). Si por lo que sea no carga, cae a la música sintetizada.
+ */
 export function startMusic() {
+  audio(); // el gesto del usuario ya desbloqueó el audio
+  if (musicTimer || (musicEl && !musicEl.paused)) return; // ya suena algo
+
+  if (!musicEl) {
+    const el = new Audio(MUSIC_URL);
+    el.loop = true;
+    el.preload = 'auto';
+    el.volume = 0;
+    el.onerror = () => {
+      musicEl = null;
+      startProcedural();
+    };
+    musicEl = el;
+  }
+  musicEl.volume = 0;
+  musicEl
+    .play()
+    .then(() => {
+      if (musicEl) fadeAudioEl(musicEl, 0.45, 2500);
+    })
+    .catch(() => {
+      musicEl = null;
+      startProcedural();
+    });
+}
+
+/** Respaldo: banda sonora sintetizada con Web Audio (sin archivos). */
+function startProcedural() {
   const ac = audio();
   if (!ac || !master || musicTimer) return;
 
@@ -541,6 +599,11 @@ export function startMusic() {
 }
 
 export function stopMusic() {
+  if (musicEl) {
+    const el = musicEl;
+    musicEl = null;
+    fadeAudioEl(el, 0, 700, () => el.pause());
+  }
   if (musicTimer) {
     clearInterval(musicTimer);
     musicTimer = null;

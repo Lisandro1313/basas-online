@@ -59,8 +59,14 @@ export function ChatPanel({ state, youId, session, act }: Props) {
     }
     const nuevos = messages.filter((m) => m.seq > seenSeq.current && m.playerId !== youId);
     if (nuevos.length) {
-      sndChat();
-      if (!open && !isDesktopOpen()) setUnread((n) => n + nuevos.length);
+      // Solo los mensajes de humanos avisan (sonido + contador). Los bots
+      // charlan todo el tiempo, así que no queremos que notifiquen.
+      const isBot = (id: string) => !!state.players.find((x) => x.id === id)?.isBot;
+      const deHumanos = nuevos.filter((m) => !isBot(m.playerId));
+      if (deHumanos.length) {
+        sndChat();
+        if (!open && !isDesktopOpen()) setUnread((n) => n + deHumanos.length);
+      }
       // Los bots hablan: leemos sus frases con su voz (una sola a la vez).
       const deBot = nuevos.find((m) => {
         const p = state.players.find((x) => x.id === m.playerId);

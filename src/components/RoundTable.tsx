@@ -160,21 +160,34 @@ export function RoundTable({ state, youId, onTable, reveal, reactions, chatBubbl
             className="absolute z-10 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center"
             style={at(seat, 44, 38)}
           >
-            {/* Burbuja de chat sobre la cabeza (mismo formato que los stickers) */}
-            {bubble && (
-              <div
-                key={bubble.seq}
-                className="emote-pop pointer-events-none absolute z-30 w-max"
-                style={{ top: 'calc(-1 * clamp(46px, 18cqmin, 82px))', maxWidth: '11rem' }}
-              >
-                <span
-                  className="block truncate rounded-xl bg-slate-900/95 px-2 py-1 text-white shadow-lg ring-1 ring-white/15"
-                  style={{ fontSize: tinySize }}
-                >
-                  {bubble.text.length > 40 ? bubble.text.slice(0, 40) + '…' : bubble.text}
-                </span>
-              </div>
-            )}
+            {/* Burbuja de chat sobre la cabeza (mismo formato que los stickers).
+                Se ancla hacia adentro según el asiento: las de la derecha crecen
+                hacia la izquierda y las de la izquierda hacia la derecha, así no
+                se cortan con el borde de la pantalla. */}
+            {bubble &&
+              (() => {
+                const cosv = Math.cos(angleOf(seat));
+                const anchor =
+                  cosv > 0.3
+                    ? { right: '8%' }
+                    : cosv < -0.3
+                      ? { left: '8%' }
+                      : { left: '50%', transform: 'translateX(-50%)' };
+                return (
+                  <div
+                    key={bubble.seq}
+                    className="emote-pop pointer-events-none absolute z-40"
+                    style={{ top: 'calc(-1 * clamp(40px, 15cqmin, 72px))', ...anchor }}
+                  >
+                    <span
+                      className="block truncate rounded-xl bg-slate-900/95 px-2 py-1 text-white shadow-xl ring-1 ring-white/15"
+                      style={{ fontSize: tinySize, maxWidth: 'min(6rem, 34vw)' }}
+                    >
+                      {bubble.text.length > 34 ? bubble.text.slice(0, 34) + '…' : bubble.text}
+                    </span>
+                  </div>
+                );
+              })()}
 
             {reaction && (
               <div

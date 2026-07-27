@@ -88,6 +88,7 @@ function recordGameTransitions(
       name: after.name ?? `Sala ${after.code}`,
       players: after.players.map((p) => p.name).slice(0, 8),
       totalRounds: after.totalRounds,
+      gameLength: after.gameLength ?? null,
       startedAt: now,
       updatedAt: now,
       status: 'playing',
@@ -167,6 +168,44 @@ export async function listGames(limit = 60): Promise<GameSummary[]> {
       finishedAt: g.finishedAt ?? null,
     };
   });
+}
+
+export interface TopScore {
+  name: string;
+  points: number;
+  code: string;
+  at: number | null;
+}
+
+/**
+ * Ranking de los puntajes más altos históricos. El ganador de cada partida es
+ * el que más puntos hizo, así que su puntaje final es el "récord" de esa mesa.
+ * Separado por formato (corta / larga).
+ */
+export async function listTopScores(
+  perList = 5
+): Promise<{ corta: TopScore[]; larga: TopScore[] }> {
+  const db = adminDb();
+  // Ordena por puntaje del ganador (índice de campo único, automático). Solo
+  // trae partidas terminadas: las que están en juego no tienen winnerPoints.
+  const snap = await db.collection('games').orderBy('winnerPoints', 'desc').limit(300).get();
+
+  const corta: TopScore[] = [];
+  const larga: TopScore[] = [];
+  for (const d of snap.docs) {
+    const g = d.data();
+    const pts = g.winnerPoints;
+    if (typeof pts !== 'number' || !g.winner) continue;
+    // Formato: preferimos el guardado; si es viejo y no lo tiene, lo inferimos
+    // por la cantidad de manos (corta = 9, larga = 18).
+    const esLarga = g.gameLength === 'larga' || (g.gameLength == null && (g.totalRounds ?? 0) > 12);
+    const list = esLarga ? larga : corta;
+    if (list.length < perList) {
+      list.push({ name: g.winner, points: pts, code: g.code ?? '', at: g.finishedAt ?? null });
+    }
+    if (corta.length >= perList && larga.length >= perList) break;
+  }
+  return { corta, larga };
 }
 
 export async function loadRoom(code: string): Promise<{ state: RoomState; version: number }> {

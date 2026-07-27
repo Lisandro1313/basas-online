@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { SupportButton } from '@/components/SupportButton';
+import { TopScores } from '@/components/TopScores';
 import { lastName, rememberName, saveSession } from '@/lib/client/session';
 
 export default function Home() {
@@ -117,6 +118,7 @@ export default function Home() {
       </details>
 
       <footer className="flex flex-col items-center gap-3 pt-2 text-center">
+        <TopScores />
         <SupportButton />
         <p className="text-xs tracking-wide text-white/35">
           Hecho por{' '}

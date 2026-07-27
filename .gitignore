@@ -25,3 +25,6 @@ serviceAccountKey.json
 *.mp4
 *.mov
 *.webm
+
+# Música propia (se sirve desde un release de GitHub, no del repo)
+*.m4a

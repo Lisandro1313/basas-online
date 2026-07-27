@@ -191,7 +191,7 @@ function botChatter(state: RoomState, botId: string, evento: Evento, prob = 0.5)
 
   const now = Date.now();
   const ultima = [...state.messages].reverse().find((m) => m.playerId === botId);
-  if (ultima && now - ultima.at < 4000) return; // enfriamiento: no repite muy seguido
+  if (ultima && now - ultima.at < 2500) return; // enfriamiento: no repite muy seguido
 
   const persona = PERSONAS[bot.name] ?? FALLBACK_PERSONA;
   const opciones = persona.lines[evento] ?? [];
@@ -221,8 +221,56 @@ function botChatter(state: RoomState, botId: string, evento: Evento, prob = 0.5)
 function botDoBid(state: RoomState, player: Player) {
   const bid = botBid(state, player);
   placeBid(state, player.id, bid);
-  if (bid === 0) botChatter(state, player.id, 'bidCero', 0.3);
-  else if (bid >= Math.ceil(state.cardsThisRound / 2)) botChatter(state, player.id, 'bidAlto', 0.3);
+  if (bid === 0) botChatter(state, player.id, 'bidCero', 0.35);
+  else if (bid >= Math.ceil(state.cardsThisRound / 2)) botChatter(state, player.id, 'bidAlto', 0.35);
+}
+
+/** El bot juega su carta y, a veces, larga un comentario al pasar. */
+function botDoPlay(state: RoomState, player: Player) {
+  playCard(state, player.id, botCard(state, player).id);
+  botChatter(state, player.id, 'relleno', 0.14);
+}
+
+/**
+ * Cruce entre bots: uno le contesta a otro para que la charla tenga vida y
+ * picardía. Elige otro bot al azar y le tira una réplica corta.
+ */
+const BOT_REPLIES = [
+  'jaja',
+  'dale, dale 😏',
+  'ni ahí 😂',
+  'callate que venís perdiendo 😆',
+  'uh, mirá quién habla',
+  'tenés razón eh',
+  'mmm sospechoso 🤨',
+  'seee, seguí participando',
+  'me hacés reír 😂',
+  'ay, no empieces 🙄',
+  'tranqui campeón 😎',
+  'esa no te la creo 😏',
+  '¿cómo te pusiste esos jeans? 👖😏',
+];
+
+function botBanter(state: RoomState, exceptId: string, prob = 0.35) {
+  if (Math.random() > prob) return;
+  const otros = state.players.filter((p) => p.isBot && p.id !== exceptId);
+  if (otros.length === 0) return;
+  const bot = otros[Math.floor(Math.random() * otros.length)];
+
+  const now = Date.now();
+  const ultima = [...state.messages].reverse().find((m) => m.playerId === bot.id);
+  if (ultima && now - ultima.at < 2500) return;
+
+  state.messageSeq += 1;
+  state.messages.push({
+    seq: state.messageSeq,
+    playerId: bot.id,
+    name: bot.name,
+    kind: 'text',
+    text: pick(BOT_REPLIES),
+    at: now,
+  });
+  if (state.messages.length > MAX_MESSAGES) state.messages = state.messages.slice(-MAX_MESSAGES);
 }
 
 /** Segundos que tiene cada jugador para mover antes de que juegue solo. */
@@ -870,10 +918,14 @@ function resolveTrick(state: RoomState) {
   state.lastTrick = { cards: [...state.trick], winnerId, seq: state.trickSeq };
   log(state, `${winner.name} se llevó la baza.`);
 
-  // Los bots comentan: el ganador festeja, alguno de los otros se queja.
-  if (winner.isBot) botChatter(state, winner.id, 'ganaBaza', 0.35);
+  // Los bots comentan: el ganador festeja, alguno de los otros se queja, y a
+  // veces se cruzan entre ellos para darle vida a la charla.
+  if (winner.isBot) {
+    botChatter(state, winner.id, 'ganaBaza', 0.4);
+    botBanter(state, winner.id, 0.3);
+  }
   const perdedorBot = state.players.find((p) => p.isBot && p.id !== winnerId);
-  if (perdedorBot) botChatter(state, perdedorBot.id, 'pierdeBaza', 0.18);
+  if (perdedorBot) botChatter(state, perdedorBot.id, 'pierdeBaza', 0.22);
 
   state.trick = [];
   state.leadSuit = null;
@@ -973,7 +1025,7 @@ export function applyBotMove(state: RoomState) {
   if (state.phase === 'bidding') {
     botDoBid(state, player);
   } else {
-    playCard(state, player.id, botCard(state, player).id);
+    botDoPlay(state, player);
   }
 }
 
@@ -1025,7 +1077,7 @@ export function applyTimeout(state: RoomState) {
   if (state.phase === 'bidding') {
     botDoBid(state, player);
   } else {
-    playCard(state, player.id, botCard(state, player).id);
+    botDoPlay(state, player);
   }
 }
 
@@ -1123,7 +1175,7 @@ export function runBots(state: RoomState) {
     if (state.phase === 'bidding') {
       botDoBid(state, player);
     } else {
-      playCard(state, player.id, botCard(state, player).id);
+      botDoPlay(state, player);
     }
   }
 }

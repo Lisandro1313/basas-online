@@ -27,18 +27,40 @@ export function setBotVoices(on: boolean) {
   }
 }
 
-let spanishVoice: SpeechSynthesisVoice | null = null;
+// Pistas de género por el nombre de la voz (según sistema operativo).
+const FEMALE_HINTS = /female|mujer|helena|laura|sabina|mónica|monica|paulina|marisol|esperanza|elena|lucia|lucía|penelope|penélope|catalina|isabela|camila|sof/i;
+const MALE_HINTS = /male|hombre|pablo|raul|raúl|jorge|juan|diego|carlos|miguel|enrique|alvaro|álvaro|andres|andrés/i;
 
-function pickSpanishVoice(): SpeechSynthesisVoice | null {
-  if (typeof window === 'undefined' || !window.speechSynthesis) return null;
-  if (spanishVoice) return spanishVoice;
-  const voices = window.speechSynthesis.getVoices();
-  spanishVoice =
-    voices.find((v) => /es[-_]AR/i.test(v.lang)) ??
-    voices.find((v) => /es[-_]419|es[-_]MX/i.test(v.lang)) ??
-    voices.find((v) => v.lang.toLowerCase().startsWith('es')) ??
-    null;
-  return spanishVoice;
+let chosen: { m: SpeechSynthesisVoice | null; f: SpeechSynthesisVoice | null } | null = null;
+
+/**
+ * Elige una voz de hombre y una de mujer, de verdad distintas cuando el sistema
+ * tiene varias en español. Así una bot mujer no suena con voz de hombre. Si solo
+ * hay una, se comparte y la diferencia la hace el tono.
+ */
+function pickVoices() {
+  if (typeof window === 'undefined' || !window.speechSynthesis) return { m: null, f: null };
+  if (chosen) return chosen;
+
+  const all = window.speechSynthesis.getVoices();
+  const es = all.filter((v) => v.lang?.toLowerCase().startsWith('es'));
+  const pool = es.length ? es : all;
+  if (pool.length === 0) return { m: null, f: null };
+
+  // Preferí es-AR / es-419 / es-MX si están.
+  const rank = (v: SpeechSynthesisVoice) =>
+    /es[-_]AR/i.test(v.lang) ? 0 : /es[-_](419|MX|US)/i.test(v.lang) ? 1 : 2;
+  const sorted = [...pool].sort((a, b) => rank(a) - rank(b));
+
+  let f = sorted.find((v) => FEMALE_HINTS.test(v.name)) ?? null;
+  let m = sorted.find((v) => MALE_HINTS.test(v.name)) ?? null;
+
+  // Si falta alguna, tomamos voces distintas entre sí de la lista.
+  if (!f) f = sorted.find((v) => v !== m) ?? sorted[0] ?? null;
+  if (!m) m = sorted.find((v) => v !== f) ?? sorted[0] ?? null;
+
+  chosen = { m, f };
+  return chosen;
 }
 
 /**
@@ -60,23 +82,26 @@ export function speakBot(text: string, gender: 'm' | 'f') {
   // Si ya hay varias frases esperando, no encolamos más (evita el "coro").
   if (synth.speaking && synth.pending) return;
 
+  const { m, f } = pickVoices();
+  const voice = gender === 'f' ? f : m;
+  const sameVoice = m && f && m === f; // solo hay una: diferenciamos por tono
+
   const u = new SpeechSynthesisUtterance(clean);
-  const voice = pickSpanishVoice();
   if (voice) u.voice = voice;
   u.lang = voice?.lang ?? 'es-AR';
-  // Mujer más agudo, hombre más grave, con una pizca de variación por bot.
-  u.pitch = gender === 'f' ? 1.35 : 0.75;
-  u.rate = 1.02;
-  u.volume = 0.9;
+  // Pitch suave para que suene natural; más marcado solo si compartimos voz.
+  u.pitch = gender === 'f' ? (sameVoice ? 1.25 : 1.08) : sameVoice ? 0.85 : 0.96;
+  u.rate = 1.0;
+  u.volume = 0.95;
   synth.speak(u);
 }
 
 /** Algunos navegadores cargan las voces async; forzamos el primer inventario. */
 export function warmUpVoices() {
   if (typeof window === 'undefined' || !window.speechSynthesis) return;
-  pickSpanishVoice();
+  pickVoices();
   window.speechSynthesis.onvoiceschanged = () => {
-    spanishVoice = null;
-    pickSpanishVoice();
+    chosen = null;
+    pickVoices();
   };
 }

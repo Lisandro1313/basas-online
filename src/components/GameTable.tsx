@@ -152,6 +152,18 @@ export function GameTable({ state, youId, busy, act }: Props) {
   /* --- Reacciones (stickers) --------------------------------------------- */
   const reactions = useReactions(state, offset.current);
 
+  // Burbuja de chat sobre la cabeza: el último mensaje de texto de cada jugador,
+  // si es reciente. useReactions ya re-renderiza cada 400ms, así se apagan solas.
+  const chatBubbles = new Map<string, { seq: number; text: string }>();
+  {
+    const nowB = Date.now() + offset.current;
+    for (const m of state.messages) {
+      if (m.kind === 'text' && m.text && nowB - m.at < 4500) {
+        chatBubbles.set(m.playerId, { seq: m.seq, text: m.text });
+      }
+    }
+  }
+
   /* --- Qué se ve en la mesa ---------------------------------------------- */
   const onTable = reveal ? reveal.cards : state.trick;
   const seconds = Math.ceil(remaining / 1000);
@@ -277,6 +289,7 @@ export function GameTable({ state, youId, busy, act }: Props) {
         onTable={onTable}
         reveal={reveal}
         reactions={reactions}
+        chatBubbles={chatBubbles}
       />
 
       <StickerBar

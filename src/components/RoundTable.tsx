@@ -14,6 +14,7 @@ interface Props {
   onTable: PlayedCard[];
   reveal: PublicState['lastTrick'];
   reactions: Map<string, ActiveReaction>;
+  chatBubbles: Map<string, { seq: number; text: string }>;
 }
 
 /**
@@ -27,7 +28,7 @@ interface Props {
  * lado, en fila, las cartas que se van jugando en la baza. Junto a cada jugador
  * se apila boca abajo un "masito" por cada baza que ganó en la ronda.
  */
-export function RoundTable({ state, youId, onTable, reveal, reactions }: Props) {
+export function RoundTable({ state, youId, onTable, reveal, reactions, chatBubbles }: Props) {
   const total = state.players.length;
   const youIndex = Math.max(0, state.players.findIndex((p) => p.id === youId));
 
@@ -92,28 +93,32 @@ export function RoundTable({ state, youId, onTable, reveal, reactions }: Props) 
         )
       )}
 
-      {/* Mensaje central: qué se llevó la baza, o el estado de la mano */}
-      <div className="pointer-events-none absolute top-1/2 left-1/2 z-20 -translate-x-1/2 -translate-y-1/2 text-center">
-        {winnerName && onTable.length > 0 ? (
+      {/* Cartel del ganador de la baza, arriba de las cartas */}
+      {winnerName && onTable.length > 0 && (
+        <div className="pointer-events-none absolute top-[40%] left-1/2 z-20 -translate-x-1/2 -translate-y-1/2 text-center">
           <span
             className="rounded-full bg-black/75 px-2.5 py-1 font-bold text-emerald-300 shadow-lg"
             style={{ fontSize: nameSize }}
           >
             {winnerName} se la llevó
           </span>
-        ) : (
-          onTable.length === 0 && (
-            <span className="text-white/30" style={{ fontSize: tinySize }}>
-              {state.phase === 'bidding' ? 'Apostando…' : 'Esperando…'}
-            </span>
-          )
-        )}
-      </div>
+        </div>
+      )}
 
-      {/* Cartas jugadas, en fila abajo del centro del paño */}
+      {/* Estado de la mano cuando no hay cartas en la mesa */}
+      {onTable.length === 0 && (
+        <div className="pointer-events-none absolute top-1/2 left-1/2 z-20 -translate-x-1/2 -translate-y-1/2 text-center">
+          <span className="text-white/30" style={{ fontSize: tinySize }}>
+            {state.phase === 'bidding' ? 'Apostando…' : 'Esperando…'}
+          </span>
+        </div>
+      )}
+
+      {/* Cartas jugadas, en fila en el centro del paño (arriba de los asientos
+          de abajo, para que con 8 jugadores no tapen a nadie) */}
       {onTable.length > 0 && (
         <div
-          className="absolute top-[65%] left-1/2 z-10 flex -translate-x-1/2 -translate-y-1/2 items-end justify-center"
+          className="absolute top-[55%] left-1/2 z-10 flex -translate-x-1/2 -translate-y-1/2 items-end justify-center"
           style={{ gap: '2%', maxWidth: '62%' }}
         >
           {onTable.map((played) => (
@@ -144,6 +149,7 @@ export function RoundTable({ state, youId, onTable, reveal, reactions }: Props) 
         const isYou = player.id === youId;
         const madeIt = player.bid !== null && player.tricks === player.bid;
         const reaction = reactions.get(player.id);
+        const bubble = chatBubbles.get(player.id);
         // El masito va hacia el centro del paño: a la derecha si el asiento está
         // en la mitad izquierda, a la izquierda si está en la derecha.
         const pileOnLeft = Math.cos(angleOf(seat)) > 0.15;
@@ -154,6 +160,22 @@ export function RoundTable({ state, youId, onTable, reveal, reactions }: Props) 
             className="absolute z-10 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center"
             style={at(seat, 44, 38)}
           >
+            {/* Burbuja de chat sobre la cabeza (mismo formato que los stickers) */}
+            {bubble && (
+              <div
+                key={bubble.seq}
+                className="emote-pop pointer-events-none absolute z-30 w-max"
+                style={{ top: 'calc(-1 * clamp(46px, 18cqmin, 82px))', maxWidth: '11rem' }}
+              >
+                <span
+                  className="block truncate rounded-xl bg-slate-900/95 px-2 py-1 text-white shadow-lg ring-1 ring-white/15"
+                  style={{ fontSize: tinySize }}
+                >
+                  {bubble.text.length > 40 ? bubble.text.slice(0, 40) + '…' : bubble.text}
+                </span>
+              </div>
+            )}
+
             {reaction && (
               <div
                 key={reaction.seq}

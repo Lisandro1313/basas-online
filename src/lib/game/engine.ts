@@ -273,6 +273,55 @@ function botBanter(state: RoomState, exceptId: string, prob = 0.35) {
   if (state.messages.length > MAX_MESSAGES) state.messages = state.messages.slice(-MAX_MESSAGES);
 }
 
+/* ------------------------------------------------------------------ */
+/* Devoluciones: los bots comentan las jugadas de otros por nombre     */
+/* ------------------------------------------------------------------ */
+
+type ReactEvento = 'ganoOtro' | 'clavo' | 'fallo' | 'lidera';
+
+// `{n}` se reemplaza por el nombre del jugador comentado.
+const REACT_SHARED: Record<ReactEvento, string[]> = {
+  ganoOtro: ['bien ahí {n} 👏', 'esa fue tuya {n}', 'uh, {n} se la llevó', '{n} viene picante hoy 🔥', 'ojo con {n} 👀'],
+  clavo: ['¡{n} la clavó! 🎯', 'uh, {n} calculó justo 👏', 'crack {n}', 'qué precisión, {n}'],
+  fallo: ['jaja {n} se pasó 😆', 'uy {n}, no te salió', '{n} apostó cualquiera 😅'],
+  lidera: ['{n} va adelante eh 👀', 'ojo que {n} lidera', 'alguien que frene a {n} 😅'],
+};
+
+// Sabor por personalidad (lo que no esté acá cae en el banco compartido).
+const REACT_PERSONA: Record<string, Partial<Record<ReactEvento, string[]>>> = {
+  Beto: { ganoOtro: ['claro, {n}, todo para vos 😒', 'otra para {n}, genial 😩'], fallo: ['te lo dije, {n} 😒'] },
+  Dani: { ganoOtro: ['disfrutá {n}, ya te alcanzo 😏', 'suerte nomás, {n}'], lidera: ['tranqui que te remonto, {n} 😎'] },
+  Gaby: { ganoOtro: ['jaja {n} otra vez 😂', 'no lo puedo creer {n} 🤣'], fallo: ['jajaja {n} 😂'] },
+  Ana: { ganoOtro: ['{n}, ganás y me conquistás 😏', 'me encanta cómo juega {n} 😘'], clavo: ['qué precisión, {n}… me gusta 😉'] },
+  Carla: { ganoOtro: ['¡bravo {n}! 🥰', 'qué bien {n} 💕'], fallo: ['no importa {n}, jugaste divino 💕'] },
+  Elsa: { ganoOtro: ['¡{n} me está matando! 😱'] },
+  Hugo: { ganoOtro: ['obvio, gana {n} y no yo 😮‍💨'] },
+  Fito: { ganoOtro: ['bien {n}, tranca 😌'] },
+};
+
+function randomOtherBot(state: RoomState, exceptId: string): Player | null {
+  const otros = state.players.filter((p) => p.isBot && p.id !== exceptId);
+  return otros.length ? otros[Math.floor(Math.random() * otros.length)] : null;
+}
+
+/** Un bot le comenta a otro jugador (por nombre) según lo que hizo. */
+function botReact(state: RoomState, botId: string, evento: ReactEvento, targetName: string, prob = 0.4) {
+  if (Math.random() > prob) return;
+  const bot = state.players.find((p) => p.id === botId);
+  if (!bot || !bot.isBot) return;
+
+  const now = Date.now();
+  const ultima = [...state.messages].reverse().find((m) => m.playerId === botId);
+  if (ultima && now - ultima.at < 2500) return;
+
+  const bank = REACT_PERSONA[bot.name]?.[evento] ?? REACT_SHARED[evento];
+  const text = pick(bank).replace('{n}', targetName);
+
+  state.messageSeq += 1;
+  state.messages.push({ seq: state.messageSeq, playerId: botId, name: bot.name, kind: 'text', text, at: now });
+  if (state.messages.length > MAX_MESSAGES) state.messages = state.messages.slice(-MAX_MESSAGES);
+}
+
 /** Segundos que tiene cada jugador para mover antes de que juegue solo. */
 export const TURN_SECONDS = 30;
 
@@ -927,6 +976,13 @@ function resolveTrick(state: RoomState) {
   const perdedorBot = state.players.find((p) => p.isBot && p.id !== winnerId);
   if (perdedorBot) botChatter(state, perdedorBot.id, 'pierdeBaza', 0.22);
 
+  // Devolución: un bot le comenta al que ganó, por su nombre. Más probable si
+  // ganó un humano, para que sientas que te siguen la jugada.
+  const comentarista = randomOtherBot(state, winnerId);
+  if (comentarista) {
+    botReact(state, comentarista.id, 'ganoOtro', winner.name, winner.isBot ? 0.28 : 0.6);
+  }
+
   state.trick = [];
   state.leadSuit = null;
   state.turnIndex = state.players.findIndex((p) => p.id === winnerId);
@@ -961,6 +1017,30 @@ function scoreRound(state: RoomState) {
   });
   state.phase = 'roundEnd';
   log(state, `Fin de la ronda ${state.round}.`);
+
+  // Devoluciones de fin de mano: felicitan al que clavó, cargan al que erró y
+  // marcan al que lidera. El enfriamiento evita que se amontonen.
+  const clavaron = results.filter((r) => r.tricks === r.bid);
+  const fallaron = results.filter((r) => Math.abs(r.tricks - r.bid) >= 2);
+  if (clavaron.length) {
+    const r = pick(clavaron);
+    const j = state.players.find((p) => p.id === r.playerId)!;
+    const b = randomOtherBot(state, r.playerId);
+    if (b) botReact(state, b.id, 'clavo', j.name, 0.5);
+  }
+  if (fallaron.length) {
+    const r = pick(fallaron);
+    const j = state.players.find((p) => p.id === r.playerId)!;
+    const b = randomOtherBot(state, r.playerId);
+    if (b) botReact(state, b.id, 'fallo', j.name, 0.45);
+  }
+  if (state.round >= 2) {
+    const lider = [...state.players].sort((a, b) => b.points - a.points)[0];
+    if (lider) {
+      const b = randomOtherBot(state, lider.id);
+      if (b) botReact(state, b.id, 'lidera', lider.name, 0.3);
+    }
+  }
 }
 
 export function nextRound(state: RoomState) {

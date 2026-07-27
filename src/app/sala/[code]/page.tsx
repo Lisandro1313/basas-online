@@ -161,7 +161,7 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
         {state.phase === 'gameOver' && <GameOver {...props} />}
       </div>
 
-      <ChatPanel state={state} youId={youId} act={room.act} />
+      <ChatPanel state={state} youId={youId} session={session} act={room.act} />
     </main>
   );
 }

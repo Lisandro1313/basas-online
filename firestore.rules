@@ -20,6 +20,14 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Señalización del canal de voz (WebRTC): presencia y ofertas/candidatos.
+    // No hay nada sensible (son datos de conexión efímeros), y WebRTC necesita
+    // que los navegadores escriban acá directo, así que va abierto pero acotado
+    // a esta rama.
+    match /voice/{code}/{document=**} {
+      allow read, write: if true;
+    }
+
     // Cualquier otra colección, cerrada.
     match /{document=**} {
       allow read, write: if false;

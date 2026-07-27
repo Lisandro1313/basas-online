@@ -5,12 +5,16 @@ import { Avatar } from './Avatar';
 import { sndChat, unlockAudio } from '@/lib/client/audio';
 import { botVoicesOn, setBotVoices, speakBot, warmUpVoices } from '@/lib/client/tts';
 import { cloudinaryEnabled, uploadChatImage } from '@/lib/client/cloudinary';
+import { useVoice } from '@/lib/client/useVoice';
+import { VoiceBar } from './VoiceBar';
 import { MAX_MESSAGE_CHARS } from '@/lib/game/types';
 import type { PublicState } from '@/lib/game/redact';
+import type { Session } from '@/lib/client/session';
 
 interface Props {
   state: PublicState;
   youId: string;
+  session: Session | null;
   act: (payload: Record<string, unknown>, opts?: { silent?: boolean }) => Promise<void>;
 }
 
@@ -18,7 +22,9 @@ interface Props {
  * Chat de la sala. En pantalla grande es un panel fijo a la izquierda; en
  * teléfono es una hoja que sube desde abajo con un botón 💬 y globo de no leídos.
  */
-export function ChatPanel({ state, youId, act }: Props) {
+export function ChatPanel({ state, youId, session, act }: Props) {
+  const myName = state.players.find((p) => p.id === youId)?.name ?? 'Vos';
+  const voice = useVoice(state.code, session, myName);
   const [open, setOpen] = useState(false); // solo aplica en mobile
   const [text, setText] = useState('');
   const [uploading, setUploading] = useState(false);
@@ -113,6 +119,7 @@ export function ChatPanel({ state, youId, act }: Props) {
 
   const body = (
     <>
+      <VoiceBar voice={voice} state={state} youId={youId} />
       <div ref={listRef} className="flex-1 space-y-2 overflow-y-auto px-3 py-2">
         {messages.length === 0 ? (
           <p className="mt-4 text-center text-xs text-white/35">

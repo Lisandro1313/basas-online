@@ -131,6 +131,12 @@ export interface RoomState {
    */
   played: Card[];
   voids: Record<string, Suit[]>;
+  /**
+   * Chat programado: charlas de ida y vuelta entre bots que se muestran
+   * escalonadas (cada `at` es el epoch ms en que se revela). Interno, no sale
+   * al cliente.
+   */
+  chatQueue: { botId: string; text: string; at: number }[];
   /** Secreto por jugador. Nunca sale del servidor: se borra al redactar. */
   tokens: Record<string, string>;
 }

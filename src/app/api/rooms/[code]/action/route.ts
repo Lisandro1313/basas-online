@@ -5,6 +5,7 @@ import {
   addEmote,
   applyBotMove,
   applyTimeout,
+  flushChatQueue,
   kickPlayer,
   nextRound,
   pauseExpired,
@@ -50,6 +51,10 @@ export async function POST(
     const state = await mutateRoom(code, (draft) => {
       assertToken(draft, playerId, token);
       const isHost = draft.hostId === playerId;
+
+      // Toda mutación es una oportunidad de mostrar las charlas programadas de
+      // los bots cuya hora ya llegó (ida y vuelta escalonado).
+      flushChatQueue(draft);
 
       switch (type) {
         case 'addBot':

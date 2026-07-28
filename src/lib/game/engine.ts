@@ -228,11 +228,13 @@ function botDoBid(state: RoomState, player: Player) {
   else if (bid >= Math.ceil(state.cardsThisRound / 2)) botChatter(state, player.id, 'bidAlto', 0.35);
 }
 
-/** El bot juega su carta y, a veces, larga un comentario o algo de ambiente. */
+/** El bot juega su carta y, a veces, larga un comentario, ambiente o abre charla. */
 function botDoPlay(state: RoomState, player: Player) {
   playCard(state, player.id, botCard(state, player).id);
   botChatter(state, player.id, 'relleno', 0.12);
   botAmbiente(state, player.id);
+  // De tanto en tanto arranca una charla de ida y vuelta con otro bot.
+  if (Math.random() < 0.1) startConversation(state);
 }
 
 /**
@@ -272,7 +274,7 @@ const SALTO_TRIUNFO = [
 ];
 const SALTO_DESCARTE = [
   '{n} descartando lo peor 😂',
-  'chau basura, tiró {n}',
+  '{n} aprovechó para limpiar la mano',
   '{n} se saca los perros de encima 🐶',
 ];
 
@@ -394,6 +396,22 @@ const TONE: Record<string, Tone> = {
 };
 const toneOf = (name: string): Tone => TONE[name] ?? 'chill';
 
+/** Agrega el mensaje de un bot al chat, sin chequear enfriamiento. */
+function appendBotMsg(state: RoomState, botId: string, text: string) {
+  const bot = state.players.find((p) => p.id === botId);
+  if (!bot || !bot.isBot || !text) return;
+  state.messageSeq += 1;
+  state.messages.push({
+    seq: state.messageSeq,
+    playerId: botId,
+    name: bot.name,
+    kind: 'text',
+    text,
+    at: Date.now(),
+  });
+  if (state.messages.length > MAX_MESSAGES) state.messages = state.messages.slice(-MAX_MESSAGES);
+}
+
 /** Empuja un mensaje de un bot respetando el enfriamiento. Devuelve si lo hizo. */
 function pushBotMsg(state: RoomState, botId: string, text: string): boolean {
   const bot = state.players.find((p) => p.id === botId);
@@ -401,10 +419,103 @@ function pushBotMsg(state: RoomState, botId: string, text: string): boolean {
   const now = Date.now();
   const ultima = [...state.messages].reverse().find((m) => m.playerId === botId);
   if (ultima && now - ultima.at < 2500) return false;
-  state.messageSeq += 1;
-  state.messages.push({ seq: state.messageSeq, playerId: botId, name: bot.name, kind: 'text', text, at: now });
-  if (state.messages.length > MAX_MESSAGES) state.messages = state.messages.slice(-MAX_MESSAGES);
+  appendBotMsg(state, botId, text);
   return true;
+}
+
+/**
+ * Conversaciones con ida y vuelta entre dos bots: uno abre y el otro (a veces el
+ * primero) contesta con coherencia, nombrándose entre ellos. Los turnos son
+ * `[quién, texto]` con quién 0 = el que abre, 1 = el otro; {vos} = el otro del par.
+ */
+type ConvTurn = [0 | 1, string];
+const CONVERSACIONES: ConvTurn[][] = [
+  [
+    [0, '¡Qué bien venís, {vos}!'],
+    [1, 'Gracias, {vos} 😌 vos también estás jugando fino'],
+  ],
+  [
+    [0, 'Uh {vos}, ¿cómo hacés para clavarla siempre?'],
+    [1, 'Práctica nomás, {vos} 😏'],
+    [0, 'Enseñame algún día jaja'],
+  ],
+  [
+    [0, 'Che {vos}, ¿todo bien por casa?'],
+    [1, 'Todo bien, {vos}, gracias por preguntar 🙂'],
+    [0, 'Me alegro 💛'],
+  ],
+  [
+    [0, '{vos}, después de esta jugamos la revancha, ¿dale?'],
+    [1, 'Obvio {vos}, no me voy sin ganarte una 😎'],
+  ],
+  [
+    [0, 'Me caés bien, {vos}, en serio'],
+    [1, 'Ay, {vos}, qué lindo 🥰 vos también'],
+  ],
+  [
+    [0, '{vos} me está ganando y me da una bronca…'],
+    [1, 'Tranqui {vos}, hoy es mi día 😏'],
+  ],
+  [
+    [0, 'Buena esa, {vos} 👏'],
+    [1, 'Gracias {vos}, me salió de pura suerte jaja'],
+  ],
+  [
+    [0, '{vos}, ¿viste cómo se picó la mesa hoy?'],
+    [1, 'Sí {vos}, está brava la cosa 😅'],
+  ],
+  [
+    [0, '{vos} sos mi rival favorito eh'],
+    [1, 'Jaja {vos}, que gane el mejor 😎'],
+  ],
+  [
+    [0, 'Igual jugás bien, {vos}, te tengo cortita'],
+    [1, 'Uy {vos}, ojito que te remonto 😏'],
+  ],
+];
+
+/** Estado del chat programado: agrega los mensajes cuya hora ya llegó. */
+export function flushChatQueue(state: RoomState) {
+  const q = state.chatQueue;
+  if (!q || q.length === 0) return;
+  const now = Date.now();
+  const restan: typeof q = [];
+  for (const e of q) {
+    if (e.at > now) {
+      restan.push(e);
+    } else if (now - e.at <= 12000) {
+      // Si no se atrasó demasiado (perdería el hilo), lo mostramos.
+      appendBotMsg(state, e.botId, e.text);
+    }
+  }
+  state.chatQueue = restan;
+}
+
+/** Arranca una charla entre dos bots: el primer turno ya, el resto programado. */
+function startConversation(state: RoomState) {
+  if (!state.chatQueue) state.chatQueue = [];
+  if (state.chatQueue.length > 0) return; // ya hay una charla en curso
+  const bots = state.players.filter((p) => p.isBot);
+  if (bots.length < 2) return;
+  const a = bots[Math.floor(Math.random() * bots.length)];
+  const resto = bots.filter((p) => p.id !== a.id);
+  const b = resto[Math.floor(Math.random() * resto.length)];
+
+  const conv = pick(CONVERSACIONES);
+  const now = Date.now();
+  let delay = 0;
+  conv.forEach((turn, i) => {
+    const [quien, tpl] = turn;
+    const speaker = quien === 0 ? a : b;
+    const other = quien === 0 ? b : a;
+    const text = tpl.split('{vos}').join(other.name);
+    if (i === 0) {
+      appendBotMsg(state, speaker.id, text);
+    } else {
+      delay += 1500 + Math.floor(Math.random() * 1300);
+      state.chatQueue.push({ botId: speaker.id, text, at: now + delay });
+    }
+  });
 }
 
 /** Un bot larga una frase GENERADA (procedural, con datos reales de la partida). */
@@ -620,6 +731,7 @@ export function createRoom(code: string, hostName: string, hostId: string, token
     botStats: { streakId: null, streak: 0, per: {} },
     played: [],
     voids: {},
+    chatQueue: [],
     tokens: {},
   };
   addPlayer(state, hostId, hostName, token);
@@ -969,6 +1081,7 @@ export function startGame(state: RoomState, length: 'corta' | 'larga' | number) 
   state.players = state.players.map((p) => ({ ...p, points: 0 }));
   state.history = [];
   state.botStats = { streakId: null, streak: 0, per: {} }; // memoria fresca por partida
+  state.chatQueue = []; // sin charlas pendientes de antes
   state.gameId = crypto.randomUUID(); // identifica esta partida en el historial
   log(state, `¡Arranca la partida! ${state.totalRounds} manos.`);
   // Los bots saludan a su manera al arrancar.

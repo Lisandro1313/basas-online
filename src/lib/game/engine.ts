@@ -604,6 +604,8 @@ export function createRoom(code: string, hostName: string, hostId: string, token
     messageSeq: 0,
     typing: {},
     botStats: { streakId: null, streak: 0, per: {} },
+    played: [],
+    voids: {},
     tokens: {},
   };
   addPlayer(state, hostId, hostName, token);
@@ -999,6 +1001,8 @@ export function startRound(state: RoomState) {
   state.leadSuit = null;
   state.lastTrick = null;
   state.trickPauseUntil = null;
+  state.played = []; // conteo de cartas: arranca limpio cada ronda
+  state.voids = {};
   state.phase = 'bidding';
   state.players = state.players.map((p, i) => ({
     ...p,
@@ -1104,6 +1108,16 @@ export function playCard(state: RoomState, playerId: string, cardId: string) {
   state.trick.push({ card, playerId });
   if (state.trick.length === 1) state.leadSuit = card.suit;
   log(state, `${player.name} jugó ${valueLabel(card.value)} de ${SUIT_NAME[card.suit]}.`);
+
+  // Conteo de cartas (info pública): registro la carta y, si saltó, que este
+  // jugador ya no tiene el palo de salida.
+  if (!state.played) state.played = [];
+  if (!state.voids) state.voids = {};
+  state.played.push(card);
+  if (esSalto && leadBefore) {
+    const v = (state.voids[playerId] ??= []);
+    if (!v.includes(leadBefore)) v.push(leadBefore);
+  }
 
   if (esSalto && Math.random() < 0.55) botSalto(state, playerId, card);
 
@@ -1414,59 +1428,126 @@ function botBid(state: RoomState, player: Player): number {
   return bid;
 }
 
+const SUIT_VALUES = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14];
+
+/**
+ * El valor más alto de `suit` que todavía podría estar en la mano de un rival:
+ * el que no se jugó ni tengo yo. Devuelve 1 si ya no queda ninguna afuera. Base
+ * del "conteo": si mi carta es más alta que esto, mando en ese palo.
+ */
+function topOutstanding(suit: Suit, played: Card[], myHand: Card[]): number {
+  const usados = new Set<number>();
+  for (const c of played) if (c.suit === suit) usados.add(c.value);
+  for (const c of myHand) if (c.suit === suit) usados.add(c.value);
+  let top = 1;
+  for (const v of SUIT_VALUES) if (!usados.has(v) && v > top) top = v;
+  return top;
+}
+
+/** ¿Tengo la carta más alta que queda de su palo? (mando ese palo) */
+function holdsMaster(card: Card, played: Card[], myHand: Card[]): boolean {
+  return card.value > topOutstanding(card.suit, played, myHand);
+}
+
+/** Cuántos triunfos siguen afuera (ni jugados ni en mi mano). */
+function trumpsOutstanding(trump: Suit | null, played: Card[], myHand: Card[]): number {
+  if (!trump) return 0;
+  const usados = new Set<number>();
+  for (const c of played) if (c.suit === trump) usados.add(c.value);
+  for (const c of myHand) if (c.suit === trump) usados.add(c.value);
+  return SUIT_VALUES.filter((v) => !usados.has(v)).length;
+}
+
+/**
+ * Elige carta "contando": recuerda lo ya jugado (`state.played`) y quién quedó
+ * sin cada palo (`state.voids`), todo info pública. Con eso sabe si su carta es
+ * la más alta que queda, si su ganada va a aguantar, y si le pueden matar con
+ * triunfo. Nunca mira las manos ajenas.
+ */
 function botCard(state: RoomState, player: Player): Card {
   const trump = state.trumpSuit;
-  const options = playableCards(player.hand, state.leadSuit, trump);
+  const hand = player.hand;
+  const options = playableCards(hand, state.leadSuit, trump);
   const byValue = [...options].sort((a, b) => a.value - b.value);
   const isT = (c: Card) => trump !== null && c.suit === trump;
 
-  // Cuántas bazas todavía quiere. Si ya cumplió (o se pasó), no quiere ganar más.
-  // Si le faltan más de las que le quedan por jugar, ya no llega: deja de forzar.
+  const played = [...(state.played ?? []), ...state.trick.map((t) => t.card)];
+  const voids = state.voids ?? {};
+
   const need = (player.bid ?? 0) - player.tricks;
-  const ganchos = player.hand.length; // bazas que le quedan por jugar
+  const ganchos = hand.length; // bazas que le quedan por jugar
   const wantWin = need > 0 && need <= ganchos;
+  const desperate = wantWin && need >= ganchos; // tiene que ganar todas las que quedan
 
-  // El más fuerte para abrir: triunfos primero, después por valor.
-  const strongest = [...options].sort(
-    (a, b) => (isT(b) ? 1 : 0) - (isT(a) ? 1 : 0) || b.value - a.value
-  )[0];
-
-  // Abre la baza.
-  if (state.trick.length === 0) {
-    // Quiere ganar: sale fuerte (triunfo alto / carta alta) para asegurarse una.
-    // No quiere: sale con la más baja para que se la lleve otro.
-    return wantWin ? strongest : byValue[0];
+  // Quiénes juegan DESPUÉS de mí en esta baza (para saber si mi ganada aguanta).
+  const total = state.players.length;
+  const laterIds: string[] = [];
+  for (let i = 1; i <= total - state.trick.length - 1; i++) {
+    laterIds.push(state.players[(state.turnIndex + i) % total].id);
   }
+  const laterVoid = (suit: Suit) => laterIds.some((id) => (voids[id] ?? []).includes(suit));
+  const tOut = trumpsOutstanding(trump, played, hand);
 
-  // Sigue la baza: ¿qué cartas ganarían la baza tal como está?
-  const winning = options.filter((card) => {
-    const hypothetical = [...state.trick, { card, playerId: player.id }];
-    return trickWinner(hypothetical, state.leadSuit, trump) === player.id;
-  });
-  const losing = options.filter((c) => !winning.includes(c));
+  // La ganadora más barata, guardando triunfos (primero no-triunfo, y bajo).
+  const cheapWin = (cards: Card[]) =>
+    [...cards].sort((a, b) => (isT(a) ? 1 : 0) - (isT(b) ? 1 : 0) || a.value - b.value)[0];
 
-  if (wantWin) {
-    // Gana lo más barato posible, guardando triunfos (primero no-triunfo bajo).
-    if (winning.length > 0) {
-      return [...winning].sort(
-        (a, b) => (isT(a) ? 1 : 0) - (isT(b) ? 1 : 0) || a.value - b.value
-      )[0];
+  // ---- Abre la baza ----
+  if (state.trick.length === 0) {
+    if (!wantWin) {
+      // No quiere ganar: sale bajo y evita salir con una carta que manda (ganaría).
+      const noManda = options.filter((c) => !holdsMaster(c, played, hand));
+      return (noManda.length ? noManda : options).sort((a, b) => a.value - b.value)[0];
     }
-    // No puede ganar esta: tira la más baja y guarda las altas para otra.
+    // Quiere ganar. 1) Si tengo el triunfo que manda, lo tiro (arrastra y asegura).
+    const misTriunfos = options.filter(isT).sort((a, b) => b.value - a.value);
+    if (misTriunfos.length && holdsMaster(misTriunfos[0], played, hand)) return misTriunfos[0];
+    // 2) Carta que manda en otro palo y que probablemente aguante (sin riesgo de
+    //    que la maten: sin triunfos afuera o nadie de los que siguen quedó sin ese palo).
+    const mandaSeguro = options
+      .filter((c) => !isT(c) && holdsMaster(c, played, hand))
+      .filter((c) => tOut === 0 || !laterVoid(c.suit))
+      .sort((a, b) => b.value - a.value);
+    if (mandaSeguro.length) return mandaSeguro[0];
+    // 3) Sin jugada segura: si está obligado a ganar todas, va con lo más fuerte;
+    //    si no, guarda las buenas y sale barato.
+    if (desperate) {
+      return [...options].sort((a, b) => (isT(b) ? 1 : 0) - (isT(a) ? 1 : 0) || b.value - a.value)[0];
+    }
     return byValue[0];
   }
 
-  // No quiere ganar (ya cumplió o no llega): deja que se la lleve otro y
-  // aprovecha para soltar sus cartas más peligrosas (altas / triunfos).
-  if (losing.length > 0) {
-    return [...losing].sort(
-      (a, b) => b.value - a.value || (isT(b) ? 1 : 0) - (isT(a) ? 1 : 0)
-    )[0];
+  // ---- Sigue la baza ----
+  const winning = options.filter((card) => {
+    const hyp = [...state.trick, { card, playerId: player.id }];
+    return trickWinner(hyp, state.leadSuit, trump) === player.id;
+  });
+  const losing = options.filter((c) => !winning.includes(c));
+
+  // ¿Mi ganada aguanta? (nadie que juegue después me la puede sacar)
+  const aguanta = (c: Card) => {
+    if (laterIds.length === 0) return true; // juego último: queda fija
+    if (isT(c)) return topOutstanding(trump as Suit, played, hand) <= c.value; // no queda triunfo más alto
+    // Gané sirviendo el palo: me superan con uno más alto del palo o matándome.
+    const hayMasAlta = topOutstanding(state.leadSuit as Suit, played, hand) > c.value;
+    const puedenMatar = tOut > 0 && laterVoid(state.leadSuit as Suit);
+    return !hayMasAlta && !puedenMatar;
+  };
+
+  if (wantWin) {
+    if (winning.length > 0) {
+      const seguras = winning.filter(aguanta);
+      return cheapWin(seguras.length ? seguras : winning);
+    }
+    return byValue[0]; // no puede ganar: tira bajo y guarda las altas
   }
-  // Obligado a ganar (todas ganan): mete la más baja para hacer el menor daño.
-  return [...winning].sort(
-    (a, b) => (isT(a) ? 1 : 0) - (isT(b) ? 1 : 0) || a.value - b.value
-  )[0];
+
+  // No quiere ganar: deja pasar la baza y suelta su carta más peligrosa.
+  if (losing.length > 0) {
+    return [...losing].sort((a, b) => b.value - a.value || (isT(b) ? 1 : 0) - (isT(a) ? 1 : 0))[0];
+  }
+  // Obligado a ganar (todas ganan): la más barata para hacer el menor daño.
+  return cheapWin(winning);
 }
 
 /**

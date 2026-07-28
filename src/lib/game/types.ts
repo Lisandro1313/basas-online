@@ -123,6 +123,14 @@ export interface RoomState {
   typing: Record<string, number>;
   /** Memoria de la partida para las devoluciones de los bots (rachas, tendencias). */
   botStats: BotStats;
+  /**
+   * "Conteo de cartas" (info pública, para que los bots jueguen mejor). Se
+   * reinicia en cada ronda. `played` son todas las cartas ya jugadas de la
+   * ronda; `voids` marca quién quedó sin tal palo (saltó). Con esto un bot sabe
+   * si su carta es la más alta que queda o si le pueden matar con triunfo.
+   */
+  played: Card[];
+  voids: Record<string, Suit[]>;
   /** Secreto por jugador. Nunca sale del servidor: se borra al redactar. */
   tokens: Record<string, string>;
 }

@@ -225,17 +225,17 @@ function botChatter(state: RoomState, botId: string, evento: Evento, prob = 0.5)
 function botDoBid(state: RoomState, player: Player) {
   const bid = botBid(state, player);
   placeBid(state, player.id, bid);
-  if (bid === 0) botChatter(state, player.id, 'bidCero', 0.22);
-  else if (bid >= Math.ceil(state.cardsThisRound / 2)) botChatter(state, player.id, 'bidAlto', 0.22);
+  if (bid === 0) botChatter(state, player.id, 'bidCero', 0.3);
+  else if (bid >= Math.ceil(state.cardsThisRound / 2)) botChatter(state, player.id, 'bidAlto', 0.3);
 }
 
 /** El bot juega su carta y, a veces, larga un comentario, ambiente o abre charla. */
 function botDoPlay(state: RoomState, player: Player) {
   playCard(state, player.id, botCard(state, player).id);
-  botChatter(state, player.id, 'relleno', 0.07);
+  botChatter(state, player.id, 'relleno', 0.1);
   botAmbiente(state, player.id);
   // De tanto en tanto arranca una charla de ida y vuelta con otro bot.
-  if (Math.random() < 0.08) startConversation(state);
+  if (Math.random() < 0.12) startConversation(state);
 }
 
 /**
@@ -402,7 +402,7 @@ const toneOf = (name: string): Tone => TONE[name] ?? 'chill';
  * charla respire aunque se disparen varios comentarios a la vez (una baza puede
  * gatillar 3-4). Las charlas programadas NO pasan por acá: ya vienen pausadas.
  */
-function botRecentlySpoke(state: RoomState, gap = 4000): boolean {
+function botRecentlySpoke(state: RoomState, gap = 3000): boolean {
   const now = Date.now();
   for (let i = state.messages.length - 1; i >= 0; i--) {
     const m = state.messages[i];
@@ -571,7 +571,7 @@ function botSalto(state: RoomState, playerId: string, card: Card) {
 }
 
 /** Comentario de ambiente suelto: clima de mesa o un dicho argentino. */
-function botAmbiente(state: RoomState, botId: string, prob = 0.045) {
+function botAmbiente(state: RoomState, botId: string, prob = 0.06) {
   if (Math.random() > prob) return;
   // Mitad clima (hambre, birra…), mitad refrán argentino.
   pushBotMsg(state, botId, pick(Math.random() < 0.5 ? AMBIENTE : DICHOS));
@@ -1296,11 +1296,11 @@ function resolveTrick(state: RoomState) {
   // Los bots comentan: el ganador festeja, alguno de los otros se queja, y a
   // veces se cruzan entre ellos para darle vida a la charla.
   if (winner.isBot) {
-    botChatter(state, winner.id, 'ganaBaza', 0.22);
-    botBanter(state, winner.id, 0.1);
+    botChatter(state, winner.id, 'ganaBaza', 0.32);
+    botBanter(state, winner.id, 0.16);
   }
   const perdedorBot = state.players.find((p) => p.isBot && p.id !== winnerId);
-  if (perdedorBot) botChatter(state, perdedorBot.id, 'pierdeBaza', 0.12);
+  if (perdedorBot) botChatter(state, perdedorBot.id, 'pierdeBaza', 0.18);
 
   // Memoria: racha de bazas al hilo.
   const stats = state.botStats;
@@ -1316,9 +1316,9 @@ function resolveTrick(state: RoomState) {
   if (comentarista) {
     // Si hay racha, un comentario GENERADO sobre la racha; si no, la reacción normal.
     if (stats.streak >= 3) {
-      botGen(state, comentarista.id, 'streak', { n: winner.name, k: stats.streak }, 0.4);
+      botGen(state, comentarista.id, 'streak', { n: winner.name, k: stats.streak }, 0.45);
     } else {
-      botReact(state, comentarista.id, 'ganoOtro', winner.name, winner.isBot ? 0.14 : 0.4);
+      botReact(state, comentarista.id, 'ganoOtro', winner.name, winner.isBot ? 0.2 : 0.5);
     }
   }
 

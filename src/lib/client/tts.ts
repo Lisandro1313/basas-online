@@ -167,10 +167,10 @@ function buildUtterance(
   let rate: number;
   if (gender === 'f') {
     pitch = voiceGen === 'f' ? 1.12 : voiceGen === 'm' ? 1.6 : 1.32; // mujer: aguda
-    rate = 1.04;
+    rate = 1.15;
   } else {
     pitch = voiceGen === 'm' ? 0.9 : voiceGen === 'f' ? 0.5 : 0.62; // hombre: grave
-    rate = voiceGen === 'm' ? 0.98 : 0.9; // voz de mujer forzada: más lento = más macho
+    rate = voiceGen === 'm' ? 1.08 : 1.0; // un poco más ágil (mujer forzada, algo menos)
   }
 
   // Carácter del bot.

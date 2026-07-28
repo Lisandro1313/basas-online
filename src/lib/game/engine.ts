@@ -26,7 +26,9 @@ import type { BotStats, Card, Player, RoomState, RoundResult, Suit } from './typ
 /** Error de regla: el API lo traduce a un 400 con mensaje para el usuario. */
 export class RuleError extends Error {}
 
-const BOT_NAMES = ['Beto', 'Carla', 'Dani', 'Elsa', 'Fito', 'Gaby', 'Hugo', 'Ana'];
+// Orden alternado hombre/mujer, así una mesa chica queda pareja de géneros.
+// (m) Beto, Fito, Hugo · (f) Carla, Elsa, Gaby, Dani, Ana
+const BOT_NAMES = ['Beto', 'Carla', 'Fito', 'Elsa', 'Hugo', 'Gaby', 'Dani', 'Ana'];
 
 type Evento =
   | 'saludo'
@@ -76,11 +78,11 @@ const PERSONAS: Record<string, Persona> = {
       relleno: ['Qué linda mesa hoy 🥰', 'Me encanta jugar con ustedes 💖'],
     },
   },
-  // Canchero
+  // Canchera
   Dani: {
-    voice: 'm',
+    voice: 'f',
     lines: {
-      saludo: ['Llegó el que sabe 😎', 'Preparen la derrota 😏'],
+      saludo: ['Llegó la que sabe 😎', 'Preparen la derrota 😏'],
       bidAlto: ['Obvio que voy alto 😎', 'Miren y aprendan'],
       bidCero: ['Cero, me reservo pa\' después 😏'],
       ganaBaza: ['Fácil 😎', 'Ni la vieron'],
@@ -288,6 +290,18 @@ const AMBIENTE = [
   'unas ganas de parrandear 🎉',
   'necesito un café ya ☕',
   'tengo la garganta seca',
+];
+
+// Cargadas cuando alguien se pasa de basas (hizo más de las que pidió).
+const PASADA = [
+  'ahhh {n} se pasó, jajaja 🤣',
+  'te pasaste {n}, no cumpliste 😝',
+  'uh {n}, ¿para qué agarraste tantas? 😂',
+  'miralo a {n}, se pasó de basas 🙈',
+  '¡se pasó {n}! le ganó la ansiedad 😂',
+  'demasiadas {n}, no sabés parar 😆',
+  '{n} no supo cuándo frenar, jaja',
+  'te comiste una de más, {n} 😏',
 ];
 
 // Dichos y refranes argentinos (folclóricos) para darle color a la mesa.
@@ -1224,8 +1238,18 @@ function scoreRound(state: RoomState) {
       }
     }
   }
-  if (fallaron.length) {
-    const r = pick(fallaron);
+  // Al que se pasó (hizo más de las que pidió) lo cargan con ganas.
+  const pasados = results.filter((r) => r.tricks > r.bid);
+  if (pasados.length && Math.random() < 0.6) {
+    const r = pick(pasados);
+    const j = state.players.find((p) => p.id === r.playerId)!;
+    const b = randomOtherBot(state, r.playerId);
+    if (b) pushBotMsg(state, b.id, pick(PASADA).split('{n}').join(j.name));
+  }
+  // El "fallo" genérico queda para el que quedó CORTO (no para el que se pasó).
+  const cortos = fallaron.filter((r) => r.tricks < r.bid);
+  if (cortos.length) {
+    const r = pick(cortos);
     const j = state.players.find((p) => p.id === r.playerId)!;
     const b = randomOtherBot(state, r.playerId);
     if (b) botReact(state, b.id, 'fallo', j.name, 0.45);

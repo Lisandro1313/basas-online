@@ -15,16 +15,22 @@ export function botVoicesOn(): boolean {
   return getVolume('bots') > 0;
 }
 
-// Pistas de género por el nombre de la voz (según sistema operativo).
-const FEMALE_HINTS = /female|mujer|helena|laura|sabina|mónica|monica|paulina|marisol|esperanza|elena|lucia|lucía|penelope|penélope|catalina|isabela|camila|sof/i;
-const MALE_HINTS = /male|hombre|pablo|raul|raúl|jorge|juan|diego|carlos|miguel|enrique|alvaro|álvaro|andres|andrés/i;
+// Pistas de género por el nombre de la voz (según sistema operativo). Amplias
+// para cubrir Windows (Microsoft …), Google y Apple en español.
+const FEMALE_HINTS =
+  /female|mujer|femenin|helena|laura|sabina|m[oó]nica|paulina|marisol|esperanza|elena|luc[ií]a|pen[eé]lope|catalina|isabela|camila|sof[ií]a|ximena|dalia|paloma|ang[eé]lica|tania|nuria|montserrat|conchita|lupe|marisa|rosa|valentina/i;
+const MALE_HINTS =
+  /\bmale|masculin|hombre|pablo|ra[uú]l|jorge|juan|diego|carlos|miguel|enrique|[aá]lvaro|andr[eé]s|dar[ií]o|gonzalo|liam|felipe|arnau|roberto|ricardo|fernando/i;
 
 let chosen: { m: SpeechSynthesisVoice | null; f: SpeechSynthesisVoice | null } | null = null;
 
 /**
- * Elige una voz de hombre y una de mujer, de verdad distintas cuando el sistema
- * tiene varias en español. Así una bot mujer no suena con voz de hombre. Si solo
- * hay una, se comparte y la diferencia la hace el tono.
+ * Elige la voz de hombre y la de mujer. Clave para que NUNCA queden al revés:
+ * solo usamos dos voces distintas cuando podemos reconocer una masculina Y una
+ * femenina por el nombre. Si no reconocemos el género (voces tipo "Google
+ * español"), usamos UNA sola voz base para ambos y la diferencia la hace el
+ * tono (agudo = mujer, grave = hombre). Así jamás se asigna una voz de hombre a
+ * una bot mujer por error.
  */
 function pickVoices() {
   if (typeof window === 'undefined' || !window.speechSynthesis) return { m: null, f: null };
@@ -35,17 +41,34 @@ function pickVoices() {
   const pool = es.length ? es : all;
   if (pool.length === 0) return { m: null, f: null };
 
-  // Preferí es-AR / es-419 / es-MX si están.
-  const rank = (v: SpeechSynthesisVoice) =>
+  // Calidad: las voces "naturales"/neurales o de red suenan mucho mejor que las
+  // locales robóticas. Cuanto más bajo, mejor.
+  const quality = (v: SpeechSynthesisVoice) => {
+    let s = 0;
+    if (/natural|neural|online|premium|enhanced/i.test(v.name)) s -= 5;
+    if (!v.localService) s -= 2; // de red, suelen ser mejores
+    if (/google/i.test(v.name)) s -= 1;
+    return s;
+  };
+  // Preferí es-AR, después es-419/MX/US, después el resto; a igualdad, la de más calidad.
+  const locale = (v: SpeechSynthesisVoice) =>
     /es[-_]AR/i.test(v.lang) ? 0 : /es[-_](419|MX|US)/i.test(v.lang) ? 1 : 2;
-  const sorted = [...pool].sort((a, b) => rank(a) - rank(b));
+  const sorted = [...pool].sort((a, b) => locale(a) - locale(b) || quality(a) - quality(b));
 
-  let f = sorted.find((v) => FEMALE_HINTS.test(v.name)) ?? null;
-  let m = sorted.find((v) => MALE_HINTS.test(v.name)) ?? null;
+  const females = sorted.filter((v) => FEMALE_HINTS.test(v.name));
+  const males = sorted.filter((v) => MALE_HINTS.test(v.name));
 
-  // Si falta alguna, tomamos voces distintas entre sí de la lista.
-  if (!f) f = sorted.find((v) => v !== m) ?? sorted[0] ?? null;
-  if (!m) m = sorted.find((v) => v !== f) ?? sorted[0] ?? null;
+  let f = females[0] ?? null;
+  let m = males[0] ?? null;
+
+  // Rellenos SIN inventar género: si solo conozco una, la otra usa la misma voz
+  // (el tono la diferencia). Si no conozco ninguna, una sola base para las dos.
+  if (f && !m) m = f;
+  else if (m && !f) f = m;
+  else if (!f && !m) {
+    f = sorted[0] ?? null;
+    m = sorted[0] ?? null;
+  }
 
   chosen = { m, f };
   return chosen;
@@ -73,14 +96,21 @@ export function speakBot(text: string, gender: 'm' | 'f') {
 
   const { m, f } = pickVoices();
   const voice = gender === 'f' ? f : m;
-  const sameVoice = m && f && m === f; // solo hay una: diferenciamos por tono
+  const sameVoice = m && f && m === f; // comparten voz: el tono hace TODA la diferencia
 
   const u = new SpeechSynthesisUtterance(clean);
   if (voice) u.voice = voice;
   u.lang = voice?.lang ?? 'es-AR';
-  // Pitch suave para que suene natural; más marcado solo si compartimos voz.
-  u.pitch = gender === 'f' ? (sameVoice ? 1.25 : 1.08) : sameVoice ? 0.85 : 0.96;
-  u.rate = 1.0;
+  // Mujer: aguda y un toque más ligera. Hombre: grave y más pausado (voz de
+  // macho). Si comparten voz base, la brecha de tono es más grande para que se
+  // note bien quién es quién sin sonar robótico.
+  if (gender === 'f') {
+    u.pitch = sameVoice ? 1.45 : 1.2;
+    u.rate = 1.03;
+  } else {
+    u.pitch = sameVoice ? 0.62 : 0.82;
+    u.rate = 0.95;
+  }
   u.volume = vol;
   synth.speak(u);
 }

@@ -15,62 +15,88 @@ export function botVoicesOn(): boolean {
   return getVolume('bots') > 0;
 }
 
-// Pistas de género por el nombre de la voz (según sistema operativo). Amplias
-// para cubrir Windows (Microsoft …), Google y Apple en español.
-const FEMALE_HINTS =
-  /female|mujer|femenin|helena|laura|sabina|m[oó]nica|paulina|marisol|esperanza|elena|luc[ií]a|pen[eé]lope|catalina|isabela|camila|sof[ií]a|ximena|dalia|paloma|ang[eé]lica|tania|nuria|montserrat|conchita|lupe|marisa|rosa|valentina/i;
-const MALE_HINTS =
-  /\bmale|masculin|hombre|pablo|ra[uú]l|jorge|juan|diego|carlos|miguel|enrique|[aá]lvaro|andr[eé]s|dar[ií]o|gonzalo|liam|felipe|arnau|roberto|ricardo|fernando/i;
+/**
+ * Género REAL de voces conocidas (Google, Windows/Microsoft, Apple). Es lo más
+ * confiable: los nombres de estas voces son estables. La clave del nombre se
+ * busca sin acentos dentro del nombre de la voz.
+ */
+const KNOWN_GENDER: Record<string, 'm' | 'f'> = {
+  // Apple (macOS/iOS)
+  monica: 'f', paulina: 'f', marisol: 'f', angelica: 'f', soledad: 'f',
+  jorge: 'm', juan: 'm', diego: 'm', carlos: 'm',
+  // Microsoft (desktop SAPI + neurales "Online (Natural)")
+  helena: 'f', sabina: 'f', laura: 'f', dalia: 'f', elvira: 'f', ximena: 'f',
+  estrella: 'f', nuria: 'f', triana: 'f', renata: 'f', yolanda: 'f', paloma: 'f',
+  larissa: 'f', catalina: 'f', marina: 'f', abril: 'f', camila: 'f', salome: 'f',
+  pablo: 'm', raul: 'm', alvaro: 'm', alonso: 'm', dario: 'm', gonzalo: 'm',
+  lorenzo: 'm', liberto: 'm', gerardo: 'm', tomas: 'm', victor: 'm', gael: 'm',
+  marcos: 'm',
+};
 
-let chosen: { m: SpeechSynthesisVoice | null; f: SpeechSynthesisVoice | null } | null = null;
+const stripAccents = (s: string) =>
+  s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+/** Devuelve 'm' | 'f' | null según lo que se pueda saber del nombre de la voz. */
+function voiceGender(v: SpeechSynthesisVoice): 'm' | 'f' | null {
+  const name = stripAccents(v.name);
+  for (const key in KNOWN_GENDER) if (name.includes(key)) return KNOWN_GENDER[key];
+  // Las voces web de Google en español ("Google español"…) son femeninas.
+  if (name.includes('google') && name.includes('espanol')) return 'f';
+  if (/\bfemale\b|femenin|mujer/.test(name)) return 'f';
+  if (/\bmale\b|masculin|hombre/.test(name)) return 'm';
+  return null;
+}
+
+interface VoicePick {
+  m: SpeechSynthesisVoice | null;
+  f: SpeechSynthesisVoice | null;
+  /** Género REAL de la voz que quedó para cada uno (para ajustar el tono). */
+  mGender: 'm' | 'f' | null;
+  fGender: 'm' | 'f' | null;
+}
+let chosen: VoicePick | null = null;
 
 /**
- * Elige la voz de hombre y la de mujer. Clave para que NUNCA queden al revés:
- * solo usamos dos voces distintas cuando podemos reconocer una masculina Y una
- * femenina por el nombre. Si no reconocemos el género (voces tipo "Google
- * español"), usamos UNA sola voz base para ambos y la diferencia la hace el
- * tono (agudo = mujer, grave = hombre). Así jamás se asigna una voz de hombre a
- * una bot mujer por error.
+ * Elige voz para hombre y para mujer. Prioriza una voz del género correcto; si
+ * el sistema no tiene voz de un género (Chrome de escritorio suele traer solo
+ * femeninas), reusa la que haya y guarda su género real, para que el tono la
+ * corrija bien fuerte. Así NUNCA queda al revés.
  */
-function pickVoices() {
-  if (typeof window === 'undefined' || !window.speechSynthesis) return { m: null, f: null };
+function pickVoices(): VoicePick {
+  const none: VoicePick = { m: null, f: null, mGender: null, fGender: null };
+  if (typeof window === 'undefined' || !window.speechSynthesis) return none;
   if (chosen) return chosen;
 
   const all = window.speechSynthesis.getVoices();
   const es = all.filter((v) => v.lang?.toLowerCase().startsWith('es'));
   const pool = es.length ? es : all;
-  if (pool.length === 0) return { m: null, f: null };
+  if (pool.length === 0) return none;
 
-  // Calidad: las voces "naturales"/neurales o de red suenan mucho mejor que las
-  // locales robóticas. Cuanto más bajo, mejor.
+  // Calidad: neurales/de red suenan mucho mejor que las locales robóticas.
   const quality = (v: SpeechSynthesisVoice) => {
     let s = 0;
     if (/natural|neural|online|premium|enhanced/i.test(v.name)) s -= 5;
-    if (!v.localService) s -= 2; // de red, suelen ser mejores
+    if (!v.localService) s -= 2;
     if (/google/i.test(v.name)) s -= 1;
     return s;
   };
-  // Preferí es-AR, después es-419/MX/US, después el resto; a igualdad, la de más calidad.
   const locale = (v: SpeechSynthesisVoice) =>
     /es[-_]AR/i.test(v.lang) ? 0 : /es[-_](419|MX|US)/i.test(v.lang) ? 1 : 2;
   const sorted = [...pool].sort((a, b) => locale(a) - locale(b) || quality(a) - quality(b));
 
-  const females = sorted.filter((v) => FEMALE_HINTS.test(v.name));
-  const males = sorted.filter((v) => MALE_HINTS.test(v.name));
+  const realF = sorted.find((v) => voiceGender(v) === 'f') ?? null;
+  const realM = sorted.find((v) => voiceGender(v) === 'm') ?? null;
+  const base = sorted[0] ?? null; // mejor voz disponible como comodín
 
-  let f = females[0] ?? null;
-  let m = males[0] ?? null;
+  const f = realF ?? base;
+  const m = realM ?? realF ?? base; // sin masculina: uso la que haya y el tono la baja
 
-  // Rellenos SIN inventar género: si solo conozco una, la otra usa la misma voz
-  // (el tono la diferencia). Si no conozco ninguna, una sola base para las dos.
-  if (f && !m) m = f;
-  else if (m && !f) f = m;
-  else if (!f && !m) {
-    f = sorted[0] ?? null;
-    m = sorted[0] ?? null;
-  }
-
-  chosen = { m, f };
+  chosen = {
+    m,
+    f,
+    mGender: m ? voiceGender(m) : null,
+    fGender: f ? voiceGender(f) : null,
+  };
   return chosen;
 }
 
@@ -94,25 +120,41 @@ export function speakBot(text: string, gender: 'm' | 'f') {
   // Si ya hay varias frases esperando, no encolamos más (evita el "coro").
   if (synth.speaking && synth.pending) return;
 
-  const { m, f } = pickVoices();
-  const voice = gender === 'f' ? f : m;
-  const sameVoice = m && f && m === f; // comparten voz: el tono hace TODA la diferencia
+  synth.speak(buildUtterance(clean, gender, vol));
+}
 
-  const u = new SpeechSynthesisUtterance(clean);
+/** Arma la locución con la voz y el tono que corresponden al género. */
+function buildUtterance(text: string, gender: 'm' | 'f', vol: number): SpeechSynthesisUtterance {
+  const picks = pickVoices();
+  const voice = gender === 'f' ? picks.f : picks.m;
+  const voiceGen = gender === 'f' ? picks.fGender : picks.mGender;
+
+  const u = new SpeechSynthesisUtterance(text);
   if (voice) u.voice = voice;
   u.lang = voice?.lang ?? 'es-AR';
-  // Mujer: aguda y un toque más ligera. Hombre: grave y más pausado (voz de
-  // macho). Si comparten voz base, la brecha de tono es más grande para que se
-  // note bien quién es quién sin sonar robótico.
+
+  // El tono se ajusta según cuánto haya que "corregir" la voz asignada:
+  //  - si ya es del género correcto, apenas un toque;
+  //  - si es neutra/desconocida, un empujón;
+  //  - si es del género opuesto (no había otra), se fuerza bien fuerte.
   if (gender === 'f') {
-    u.pitch = sameVoice ? 1.45 : 1.2;
-    u.rate = 1.03;
+    u.pitch = voiceGen === 'f' ? 1.12 : voiceGen === 'm' ? 1.6 : 1.32; // mujer: aguda
+    u.rate = 1.04;
   } else {
-    u.pitch = sameVoice ? 0.62 : 0.82;
-    u.rate = 0.95;
+    u.pitch = voiceGen === 'm' ? 0.9 : voiceGen === 'f' ? 0.5 : 0.62; // hombre: grave
+    u.rate = voiceGen === 'm' ? 0.98 : 0.9; // si es voz de mujer forzada, más lento = más macho
   }
-  u.volume = vol;
-  synth.speak(u);
+  u.volume = vol > 0 ? vol : 0.9;
+  return u;
+}
+
+/** Muestra de voz de mujer y de hombre, para probar cómo suenan. */
+export function testVoices() {
+  if (typeof window === 'undefined' || !window.speechSynthesis) return;
+  const synth = window.speechSynthesis;
+  synth.cancel();
+  synth.speak(buildUtterance('Hola, soy Carla. ¿Jugamos unas bazas?', 'f', getVolume('bots')));
+  synth.speak(buildUtterance('Y yo soy Beto. A ver quién gana.', 'm', getVolume('bots')));
 }
 
 /** Algunos navegadores cargan las voces async; forzamos el primer inventario. */

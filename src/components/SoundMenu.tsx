@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { getVolume, setVolume, unlockAudio, startMusic, type SoundKind } from '@/lib/client/audio';
+import { testVoices, warmUpVoices } from '@/lib/client/tts';
 
 /**
  * Un solo control de sonido: el botón 🔊 despliega 4 volúmenes independientes
@@ -105,6 +106,18 @@ export function SoundMenu() {
                   onChange={(e) => change(kind, Number(e.target.value) / 100)}
                   className="w-full accent-amber-400"
                 />
+                {kind === 'bots' && (
+                  <button
+                    onClick={() => {
+                      unlockAudio();
+                      warmUpVoices();
+                      testVoices();
+                    }}
+                    className="mt-1 rounded-md bg-white/10 px-2 py-0.5 text-[11px] text-white/70 hover:bg-white/20"
+                  >
+                    ▶ Probar voces (mujer y hombre)
+                  </button>
+                )}
               </label>
             ))}
           </div>

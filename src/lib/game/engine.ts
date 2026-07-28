@@ -947,7 +947,9 @@ export function startGame(state: RoomState, length: 'corta' | 'larga' | number) 
   }
 
   state.round = 0;
-  state.dealerIndex = state.players.length - 1;
+  // Dealer inicial al azar (startRound le suma 1, así que el primero en repartir
+  // sale parejo entre todos). De ahí en más va rotando normal.
+  state.dealerIndex = Math.floor(Math.random() * state.players.length);
   state.players = state.players.map((p) => ({ ...p, points: 0 }));
   state.history = [];
   state.botStats = { streakId: null, streak: 0, per: {} }; // memoria fresca por partida
@@ -1373,46 +1375,98 @@ export function playAgain(state: RoomState) {
 /* Bots                                                                */
 /* ------------------------------------------------------------------ */
 
-function botBid(state: RoomState, player: Player): number {
-  let strength = 0;
-  for (const card of player.hand) {
-    if (card.value >= 12) strength += 1;
-    else if (card.value >= 10) strength += 0.5;
-    if (card.suit === state.trumpSuit) strength += 0.5;
+/**
+ * Estima cuántas bazas puede hacer la mano. Cada carta suma una probabilidad
+ * aproximada de ganar su baza: los triunfos valen bastante (hasta uno bajo puede
+ * matar), las cartas de otro palo casi solo si son A/K. Así, con dos triunfos
+ * bajos en una mano de cuatro pide ~1, no cuatro.
+ */
+function estimateTricks(hand: Card[], trump: Suit | null): number {
+  let exp = 0;
+  for (const c of hand) {
+    if (trump && c.suit === trump) {
+      exp += c.value === 14 ? 1 : c.value === 13 ? 0.9 : c.value === 12 ? 0.78 : c.value === 11 ? 0.62 : 0.45;
+    } else {
+      exp += c.value === 14 ? 0.88 : c.value === 13 ? 0.55 : c.value === 12 ? 0.3 : c.value === 11 ? 0.15 : 0.05;
+    }
   }
+  return exp;
+}
 
-  let bid = Math.max(0, Math.min(Math.round(strength), state.cardsThisRound));
+function botBid(state: RoomState, player: Player): number {
+  const n = state.cardsThisRound;
+  // Estimación + un poco de ruido para que no pidan todos exactamente igual.
+  const exp = estimateTricks(player.hand, state.trumpSuit) + (Math.random() - 0.5) * 0.4;
+  let bid = Math.max(0, Math.min(Math.round(exp), n));
+
   const forbidden = forbiddenBid(state);
   if (forbidden === bid) {
-    bid = bid > 0 ? bid - 1 : bid + 1;
-    bid = Math.max(0, Math.min(bid, state.cardsThisRound));
+    // El dealer no puede cerrar justo: se corre al valor permitido más cercano
+    // a su estimación real (no siempre para abajo).
+    const down = bid - 1;
+    const up = bid + 1;
+    const canDown = down >= 0;
+    const canUp = up <= n;
+    if (canDown && (!canUp || Math.abs(exp - down) <= Math.abs(exp - up))) bid = down;
+    else if (canUp) bid = up;
+    bid = Math.max(0, Math.min(bid, n));
   }
   return bid;
 }
 
 function botCard(state: RoomState, player: Player): Card {
-  const options = playableCards(player.hand, state.leadSuit, state.trumpSuit);
-  const needsMore = player.tricks < (player.bid ?? 0);
+  const trump = state.trumpSuit;
+  const options = playableCards(player.hand, state.leadSuit, trump);
   const byValue = [...options].sort((a, b) => a.value - b.value);
+  const isT = (c: Card) => trump !== null && c.suit === trump;
 
-  // Abre la baza: si necesita bazas tira lo más alto, si no lo más bajo.
+  // Cuántas bazas todavía quiere. Si ya cumplió (o se pasó), no quiere ganar más.
+  // Si le faltan más de las que le quedan por jugar, ya no llega: deja de forzar.
+  const need = (player.bid ?? 0) - player.tricks;
+  const ganchos = player.hand.length; // bazas que le quedan por jugar
+  const wantWin = need > 0 && need <= ganchos;
+
+  // El más fuerte para abrir: triunfos primero, después por valor.
+  const strongest = [...options].sort(
+    (a, b) => (isT(b) ? 1 : 0) - (isT(a) ? 1 : 0) || b.value - a.value
+  )[0];
+
+  // Abre la baza.
   if (state.trick.length === 0) {
-    return needsMore ? byValue[byValue.length - 1] : byValue[0];
+    // Quiere ganar: sale fuerte (triunfo alto / carta alta) para asegurarse una.
+    // No quiere: sale con la más baja para que se la lleve otro.
+    return wantWin ? strongest : byValue[0];
   }
 
-  const currentWinner = trickWinner(state.trick, state.leadSuit, state.trumpSuit);
-  const winning = byValue.filter((card) => {
+  // Sigue la baza: ¿qué cartas ganarían la baza tal como está?
+  const winning = options.filter((card) => {
     const hypothetical = [...state.trick, { card, playerId: player.id }];
-    return trickWinner(hypothetical, state.leadSuit, state.trumpSuit) === player.id;
+    return trickWinner(hypothetical, state.leadSuit, trump) === player.id;
   });
+  const losing = options.filter((c) => !winning.includes(c));
 
-  if (needsMore && winning.length > 0) return winning[0];
-  if (!needsMore) {
-    const losing = byValue.filter((c) => !winning.includes(c));
-    if (losing.length > 0) return losing[0];
+  if (wantWin) {
+    // Gana lo más barato posible, guardando triunfos (primero no-triunfo bajo).
+    if (winning.length > 0) {
+      return [...winning].sort(
+        (a, b) => (isT(a) ? 1 : 0) - (isT(b) ? 1 : 0) || a.value - b.value
+      )[0];
+    }
+    // No puede ganar esta: tira la más baja y guarda las altas para otra.
+    return byValue[0];
   }
-  void currentWinner;
-  return byValue[0];
+
+  // No quiere ganar (ya cumplió o no llega): deja que se la lleve otro y
+  // aprovecha para soltar sus cartas más peligrosas (altas / triunfos).
+  if (losing.length > 0) {
+    return [...losing].sort(
+      (a, b) => b.value - a.value || (isT(b) ? 1 : 0) - (isT(a) ? 1 : 0)
+    )[0];
+  }
+  // Obligado a ganar (todas ganan): mete la más baja para hacer el menor daño.
+  return [...winning].sort(
+    (a, b) => (isT(a) ? 1 : 0) - (isT(b) ? 1 : 0) || a.value - b.value
+  )[0];
 }
 
 /**

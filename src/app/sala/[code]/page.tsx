@@ -2,7 +2,7 @@
 
 import { use, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { AudioControls } from '@/components/AudioControls';
+import { SoundMenu } from '@/components/SoundMenu';
 import { ChatPanel } from '@/components/ChatPanel';
 import { GameOver } from '@/components/GameOver';
 import { GameTable } from '@/components/GameTable';
@@ -116,25 +116,21 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
 
   return (
     <main className="min-h-dvh">
-      <div className="flex items-center justify-between px-4 py-2 text-xs text-white/50">
+      <div className="relative flex items-center px-4 py-2 text-xs text-white/50">
         <Link href="/" className="hover:text-white">
           ← Basas
         </Link>
-        <span className="flex items-center gap-3">
-          <span className="font-mono tracking-widest text-white/70">{code}</span>
-          <AudioControls />
-          <span className="flex items-center gap-1">
-            <span
-              className={`h-2 w-2 rounded-full ${
-                !room.connected
-                  ? 'animate-pulse bg-rose-400'
-                  : room.live
-                    ? 'bg-emerald-400'
-                    : 'bg-amber-400'
-              }`}
-            />
-            {!room.connected ? 'reconectando…' : room.live ? 'en vivo' : 'sincronizando'}
-          </span>
+        <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 font-mono tracking-widest text-white/70">
+          {code}
+        </span>
+        <span className="ml-auto flex items-center gap-2">
+          {!room.connected && (
+            <span className="flex items-center gap-1 text-rose-300">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-rose-400" />
+              reconectando…
+            </span>
+          )}
+          <SoundMenu />
         </span>
       </div>
 

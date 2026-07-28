@@ -19,6 +19,7 @@
 
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
+let sfxBus: GainNode | null = null; // volumen de efectos (cartas, ambiente)
 let dry: GainNode | null = null;
 let wet: GainNode | null = null;
 let musicGain: GainNode | null = null;
@@ -33,22 +34,72 @@ const MUSIC_URL =
 let musicEl: HTMLAudioElement | null = null;
 let musicFade: ReturnType<typeof setInterval> | null = null;
 
-const PREFS = { sfx: 'basas:sfx', music: 'basas:music' };
+/**
+ * Volúmenes independientes, cada uno de 0 a 1, guardados en localStorage:
+ *  - sfx:   efectos (cartas, ambiente)
+ *  - music: música de fondo
+ *  - bots:  voces de los bots (TTS) — lo lee tts.ts
+ *  - voice: canal de voz (lo que escuchás de los demás) — lo lee useVoice.ts
+ */
+export type SoundKind = 'sfx' | 'music' | 'bots' | 'voice';
 
-export function prefEnabled(kind: 'sfx' | 'music'): boolean {
+const VOL_KEY: Record<SoundKind, string> = {
+  sfx: 'basas:vol:sfx',
+  music: 'basas:vol:music',
+  bots: 'basas:vol:bots',
+  voice: 'basas:vol:voice',
+};
+const VOL_DEFAULT: Record<SoundKind, number> = { sfx: 0.9, music: 0.4, bots: 0.95, voice: 1 };
+
+export function getVolume(kind: SoundKind): number {
   try {
-    return (localStorage.getItem(PREFS[kind]) ?? (kind === 'sfx' ? '1' : '0')) === '1';
+    const raw = localStorage.getItem(VOL_KEY[kind]);
+    if (raw == null) return VOL_DEFAULT[kind];
+    const v = Number(raw);
+    return Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : VOL_DEFAULT[kind];
   } catch {
-    return kind === 'sfx';
+    return VOL_DEFAULT[kind];
   }
 }
 
-export function setPref(kind: 'sfx' | 'music', on: boolean) {
+export function setVolume(kind: SoundKind, value: number) {
+  const v = Math.min(1, Math.max(0, value));
   try {
-    localStorage.setItem(PREFS[kind], on ? '1' : '0');
+    localStorage.setItem(VOL_KEY[kind], String(v));
   } catch {
-    /* sin storage, vale solo para esta sesión */
+    /* sin storage: vale solo esta sesión */
   }
+  applyVolume(kind, v);
+  // Aviso para quien maneja su propio audio (el canal de voz).
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('basas:volume', { detail: { kind, value: v } }));
+  }
+}
+
+function applyVolume(kind: SoundKind, v: number) {
+  if (kind === 'sfx') {
+    if (sfxBus) sfxBus.gain.value = v;
+  } else if (kind === 'music') {
+    if (v <= 0) {
+      stopMusic();
+    } else {
+      startMusic(); // arranca si no estaba sonando
+      if (musicEl) {
+        if (musicFade) {
+          clearInterval(musicFade);
+          musicFade = null;
+        }
+        musicEl.volume = v;
+      }
+      if (musicGain && ctx) musicGain.gain.value = v * 0.3; // respaldo sintetizado
+    }
+  }
+  // 'bots' y 'voice' los aplican sus consumidores leyendo getVolume().
+}
+
+/** Compat: algunos componentes solo preguntan si hay efectos/música (>0). */
+export function prefEnabled(kind: 'sfx' | 'music'): boolean {
+  return getVolume(kind) > 0;
 }
 
 /** Impulso de sala pequeña: ruido que decae. Da la cola de reverb. */
@@ -78,16 +129,22 @@ function audio(): AudioContext | null {
     master.gain.value = 0.9;
     master.connect(ctx.destination);
 
+    // Bus de efectos: su ganancia es el volumen de SFX (regulable). La música
+    // por archivo va por su propio <audio>, así que no pasa por acá.
+    sfxBus = ctx.createGain();
+    sfxBus.gain.value = getVolume('sfx');
+    sfxBus.connect(master);
+
     const reverb = ctx.createConvolver();
     reverb.buffer = buildImpulse(ctx);
 
     dry = ctx.createGain();
     dry.gain.value = 1;
-    dry.connect(master);
+    dry.connect(sfxBus);
 
     wet = ctx.createGain();
     wet.gain.value = 0.22; // apenas un ambiente, no una catedral
-    wet.connect(reverb).connect(master);
+    wet.connect(reverb).connect(sfxBus);
   }
   if (ctx.state === 'suspended') void ctx.resume();
   return ctx;
@@ -549,7 +606,7 @@ export function startMusic() {
   musicEl
     .play()
     .then(() => {
-      if (musicEl) fadeAudioEl(musicEl, 0.45, 2500);
+      if (musicEl) fadeAudioEl(musicEl, getVolume('music'), 2500);
     })
     .catch(() => {
       musicEl = null;

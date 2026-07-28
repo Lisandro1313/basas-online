@@ -9,22 +9,10 @@
  * vuelve claramente masculina o femenina.
  */
 
-const PREF = 'basas:botvoices';
+import { getVolume } from './audio';
 
 export function botVoicesOn(): boolean {
-  try {
-    return (localStorage.getItem(PREF) ?? '1') === '1'; // por defecto, prendidas
-  } catch {
-    return true;
-  }
-}
-
-export function setBotVoices(on: boolean) {
-  try {
-    localStorage.setItem(PREF, on ? '1' : '0');
-  } catch {
-    /* sin storage: vale solo esta sesión */
-  }
+  return getVolume('bots') > 0;
 }
 
 // Pistas de género por el nombre de la voz (según sistema operativo).
@@ -69,7 +57,8 @@ function pickVoices() {
  */
 export function speakBot(text: string, gender: 'm' | 'f') {
   if (typeof window === 'undefined' || !window.speechSynthesis) return;
-  if (!botVoicesOn()) return;
+  const vol = getVolume('bots');
+  if (vol <= 0) return;
   if (document.hidden) return; // no hablar en segundo plano
 
   const clean = text
@@ -92,7 +81,7 @@ export function speakBot(text: string, gender: 'm' | 'f') {
   // Pitch suave para que suene natural; más marcado solo si compartimos voz.
   u.pitch = gender === 'f' ? (sameVoice ? 1.25 : 1.08) : sameVoice ? 0.85 : 0.96;
   u.rate = 1.0;
-  u.volume = 0.95;
+  u.volume = vol;
   synth.speak(u);
 }
 

@@ -10,6 +10,7 @@ import {
   setDoc,
 } from 'firebase/firestore';
 import { clientDb } from './firebase';
+import { getVolume } from './audio';
 import type { Session } from './session';
 
 /**
@@ -69,6 +70,17 @@ export function useVoice(code: string, session: Session | null, myName: string):
   const analysers = useRef<Map<string, () => void>>(new Map());
   const unsubs = useRef<Array<() => void>>([]);
   const cleanupRef = useRef<() => void>(() => {});
+
+  // El slider de "canal de voz" cambia el volumen de lo que escuchás de los demás.
+  useEffect(() => {
+    const onVol = (e: Event) => {
+      const d = (e as CustomEvent<{ kind: string; value: number }>).detail;
+      if (d?.kind !== 'voice') return;
+      audioEls.current.forEach((el) => (el.volume = d.value));
+    };
+    window.addEventListener('basas:volume', onVol);
+    return () => window.removeEventListener('basas:volume', onVol);
+  }, []);
 
   /** Detecta si un stream tiene voz (para el indicador de "hablando"). */
   const watchLevel = useCallback((id: string, stream: MediaStream, isSelf: boolean) => {
@@ -151,6 +163,7 @@ export function useVoice(code: string, session: Session | null, myName: string):
             audioEls.current.set(peerId, el);
           }
           el.srcObject = e.streams[0];
+          el.volume = getVolume('voice');
           void el.play().catch(() => {});
           watchLevel(peerId, e.streams[0], false);
         };

@@ -191,6 +191,7 @@ function botChatter(state: RoomState, botId: string, evento: Evento, prob = 0.5)
   const bot = state.players.find((p) => p.id === botId);
   if (!bot || !bot.isBot) return;
   if (Math.random() > prob) return;
+  if (botRecentlySpoke(state)) return; // la mesa acaba de hablar: dejamos respirar
 
   const now = Date.now();
   const ultima = [...state.messages].reverse().find((m) => m.playerId === botId);
@@ -224,17 +225,17 @@ function botChatter(state: RoomState, botId: string, evento: Evento, prob = 0.5)
 function botDoBid(state: RoomState, player: Player) {
   const bid = botBid(state, player);
   placeBid(state, player.id, bid);
-  if (bid === 0) botChatter(state, player.id, 'bidCero', 0.35);
-  else if (bid >= Math.ceil(state.cardsThisRound / 2)) botChatter(state, player.id, 'bidAlto', 0.35);
+  if (bid === 0) botChatter(state, player.id, 'bidCero', 0.22);
+  else if (bid >= Math.ceil(state.cardsThisRound / 2)) botChatter(state, player.id, 'bidAlto', 0.22);
 }
 
 /** El bot juega su carta y, a veces, larga un comentario, ambiente o abre charla. */
 function botDoPlay(state: RoomState, player: Player) {
   playCard(state, player.id, botCard(state, player).id);
-  botChatter(state, player.id, 'relleno', 0.12);
+  botChatter(state, player.id, 'relleno', 0.07);
   botAmbiente(state, player.id);
   // De tanto en tanto arranca una charla de ida y vuelta con otro bot.
-  if (Math.random() < 0.1) startConversation(state);
+  if (Math.random() < 0.08) startConversation(state);
 }
 
 /**
@@ -396,6 +397,22 @@ const TONE: Record<string, Tone> = {
 };
 const toneOf = (name: string): Tone => TONE[name] ?? 'chill';
 
+/**
+ * Freno global de mesa: ¿habló algún bot hace muy poco? Sirve para que la
+ * charla respire aunque se disparen varios comentarios a la vez (una baza puede
+ * gatillar 3-4). Las charlas programadas NO pasan por acá: ya vienen pausadas.
+ */
+function botRecentlySpoke(state: RoomState, gap = 4000): boolean {
+  const now = Date.now();
+  for (let i = state.messages.length - 1; i >= 0; i--) {
+    const m = state.messages[i];
+    if (now - m.at > gap) return false; // ya no hay nada reciente
+    const p = state.players.find((x) => x.id === m.playerId);
+    if (p?.isBot) return true;
+  }
+  return false;
+}
+
 /** Agrega el mensaje de un bot al chat, sin chequear enfriamiento. */
 function appendBotMsg(state: RoomState, botId: string, text: string) {
   const bot = state.players.find((p) => p.id === botId);
@@ -416,6 +433,7 @@ function appendBotMsg(state: RoomState, botId: string, text: string) {
 function pushBotMsg(state: RoomState, botId: string, text: string): boolean {
   const bot = state.players.find((p) => p.id === botId);
   if (!bot || !bot.isBot || !text) return false;
+  if (botRecentlySpoke(state)) return false; // freno global de mesa
   const now = Date.now();
   const ultima = [...state.messages].reverse().find((m) => m.playerId === botId);
   if (ultima && now - ultima.at < 2500) return false;
@@ -495,6 +513,7 @@ export function flushChatQueue(state: RoomState) {
 function startConversation(state: RoomState) {
   if (!state.chatQueue) state.chatQueue = [];
   if (state.chatQueue.length > 0) return; // ya hay una charla en curso
+  if (botRecentlySpoke(state)) return; // arranca solo en un silencio
   const bots = state.players.filter((p) => p.isBot);
   if (bots.length < 2) return;
   const a = bots[Math.floor(Math.random() * bots.length)];
@@ -552,7 +571,7 @@ function botSalto(state: RoomState, playerId: string, card: Card) {
 }
 
 /** Comentario de ambiente suelto: clima de mesa o un dicho argentino. */
-function botAmbiente(state: RoomState, botId: string, prob = 0.07) {
+function botAmbiente(state: RoomState, botId: string, prob = 0.045) {
   if (Math.random() > prob) return;
   // Mitad clima (hambre, birra…), mitad refrán argentino.
   pushBotMsg(state, botId, pick(Math.random() < 0.5 ? AMBIENTE : DICHOS));
@@ -1084,10 +1103,14 @@ export function startGame(state: RoomState, length: 'corta' | 'larga' | number) 
   state.chatQueue = []; // sin charlas pendientes de antes
   state.gameId = crypto.randomUUID(); // identifica esta partida en el historial
   log(state, `¡Arranca la partida! ${state.totalRounds} manos.`);
-  // Los bots saludan a su manera al arrancar.
-  for (const p of state.players) {
-    if (p.isBot) botChatter(state, p.id, 'saludo', 0.6);
-  }
+  // Saludan solo un par de bots (uno ya, otro escalonado), no todos a la vez.
+  const saludan = shuffle(state.players.filter((p) => p.isBot)).slice(0, 2);
+  saludan.forEach((p, i) => {
+    const line = (PERSONAS[p.name] ?? FALLBACK_PERSONA).lines.saludo;
+    if (!line?.length) return;
+    if (i === 0) appendBotMsg(state, p.id, pick(line));
+    else state.chatQueue.push({ botId: p.id, text: pick(line), at: Date.now() + 1600 });
+  });
   startRound(state);
 }
 
@@ -1104,9 +1127,15 @@ export function startRound(state: RoomState) {
     state.winnerId = best.id;
     if (best) best.wins = (best.wins ?? 0) + 1; // marcador acumulado de la sala
     log(state, `Fin del juego. Ganó ${best.name} con ${best.points} puntos.`);
-    // Los bots cierran: el ganador festeja, los demás se lamentan.
-    for (const p of state.players) {
-      if (p.isBot) botChatter(state, p.id, p.id === best.id ? 'ganaJuego' : 'pierdeJuego', 0.8);
+    // Cierre sobrio: si ganó un bot festeja, y uno solo de los otros se lamenta.
+    if (best.isBot) {
+      const line = (PERSONAS[best.name] ?? FALLBACK_PERSONA).lines.ganaJuego;
+      if (line?.length) appendBotMsg(state, best.id, pick(line));
+    }
+    const otroBot = state.players.find((p) => p.isBot && p.id !== best.id);
+    if (otroBot) {
+      const line = (PERSONAS[otroBot.name] ?? FALLBACK_PERSONA).lines.pierdeJuego;
+      if (line?.length) appendBotMsg(state, otroBot.id, pick(line));
     }
     return;
   }
@@ -1267,11 +1296,11 @@ function resolveTrick(state: RoomState) {
   // Los bots comentan: el ganador festeja, alguno de los otros se queja, y a
   // veces se cruzan entre ellos para darle vida a la charla.
   if (winner.isBot) {
-    botChatter(state, winner.id, 'ganaBaza', 0.4);
-    botBanter(state, winner.id, 0.3);
+    botChatter(state, winner.id, 'ganaBaza', 0.22);
+    botBanter(state, winner.id, 0.1);
   }
   const perdedorBot = state.players.find((p) => p.isBot && p.id !== winnerId);
-  if (perdedorBot) botChatter(state, perdedorBot.id, 'pierdeBaza', 0.22);
+  if (perdedorBot) botChatter(state, perdedorBot.id, 'pierdeBaza', 0.12);
 
   // Memoria: racha de bazas al hilo.
   const stats = state.botStats;
@@ -1286,10 +1315,10 @@ function resolveTrick(state: RoomState) {
   const comentarista = randomOtherBot(state, winnerId);
   if (comentarista) {
     // Si hay racha, un comentario GENERADO sobre la racha; si no, la reacción normal.
-    if (stats.streak >= 2) {
-      botGen(state, comentarista.id, 'streak', { n: winner.name, k: stats.streak }, 0.55);
+    if (stats.streak >= 3) {
+      botGen(state, comentarista.id, 'streak', { n: winner.name, k: stats.streak }, 0.4);
     } else {
-      botReact(state, comentarista.id, 'ganoOtro', winner.name, winner.isBot ? 0.28 : 0.6);
+      botReact(state, comentarista.id, 'ganoOtro', winner.name, winner.isBot ? 0.14 : 0.4);
     }
   }
 
@@ -1335,45 +1364,48 @@ function scoreRound(state: RoomState) {
     else if (Math.abs(r.tricks - r.bid) >= 2) bucket.fallos += 1;
   }
 
-  // Devoluciones de fin de mano: felicitan al que clavó (y si ya lo hizo varias
-  // veces, una frase generada más picante), cargan al que erró y marcan al líder.
+  // Devolución de fin de mano: como mucho UN comentario (el freno global corta
+  // el resto). Junto las candidatas y las pruebo en orden al azar, así no gana
+  // siempre la misma y a veces no comenta nadie (silencio natural).
+  const nombre = (id: string) => state.players.find((p) => p.id === id)!.name;
   const clavaron = results.filter((r) => r.tricks === r.bid);
-  const fallaron = results.filter((r) => Math.abs(r.tricks - r.bid) >= 2);
+  const pasados = results.filter((r) => r.tricks > r.bid);
+  const cortos = results.filter((r) => r.bid - r.tricks >= 2);
+
+  const devoluciones: (() => void)[] = [];
   if (clavaron.length) {
     const r = pick(clavaron);
-    const j = state.players.find((p) => p.id === r.playerId)!;
     const b = randomOtherBot(state, r.playerId);
     if (b) {
-      if (statBucket(state, r.playerId).clavadas >= 2) {
-        botGen(state, b.id, 'clavoOtra', { n: j.name }, 0.6);
-      } else {
-        botReact(state, b.id, 'clavo', j.name, 0.5);
-      }
+      devoluciones.push(() => {
+        if (statBucket(state, r.playerId).clavadas >= 2) {
+          botGen(state, b.id, 'clavoOtra', { n: nombre(r.playerId) }, 0.5);
+        } else {
+          botReact(state, b.id, 'clavo', nombre(r.playerId), 0.45);
+        }
+      });
     }
   }
-  // Al que se pasó (hizo más de las que pidió) lo cargan con ganas.
-  const pasados = results.filter((r) => r.tricks > r.bid);
-  if (pasados.length && Math.random() < 0.6) {
+  if (pasados.length) {
     const r = pick(pasados);
-    const j = state.players.find((p) => p.id === r.playerId)!;
     const b = randomOtherBot(state, r.playerId);
-    if (b) pushBotMsg(state, b.id, pick(PASADA).split('{n}').join(j.name));
+    if (b) {
+      devoluciones.push(() => {
+        if (Math.random() < 0.5) pushBotMsg(state, b.id, pick(PASADA).split('{n}').join(nombre(r.playerId)));
+      });
+    }
   }
-  // El "fallo" genérico queda para el que quedó CORTO (no para el que se pasó).
-  const cortos = fallaron.filter((r) => r.tricks < r.bid);
   if (cortos.length) {
     const r = pick(cortos);
-    const j = state.players.find((p) => p.id === r.playerId)!;
     const b = randomOtherBot(state, r.playerId);
-    if (b) botReact(state, b.id, 'fallo', j.name, 0.45);
+    if (b) devoluciones.push(() => botReact(state, b.id, 'fallo', nombre(r.playerId), 0.35));
   }
   if (state.round >= 2) {
     const lider = [...state.players].sort((a, b) => b.points - a.points)[0];
-    if (lider) {
-      const b = randomOtherBot(state, lider.id);
-      if (b) botGen(state, b.id, 'lead', { n: lider.name }, 0.3);
-    }
+    const b = lider ? randomOtherBot(state, lider.id) : null;
+    if (lider && b) devoluciones.push(() => botGen(state, b.id, 'lead', { n: lider.name }, 0.22));
   }
+  for (const d of shuffle(devoluciones)) d();
 }
 
 export function nextRound(state: RoomState) {

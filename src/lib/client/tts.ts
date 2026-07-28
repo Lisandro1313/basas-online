@@ -104,7 +104,7 @@ function pickVoices(): VoicePick {
  * Habla el texto con la voz indicada. Quita los emojis (no se leen) y limita el
  * largo. Descarta si hay demasiado en cola, para no acumular.
  */
-export function speakBot(text: string, gender: 'm' | 'f') {
+export function speakBot(text: string, gender: 'm' | 'f', persona?: string) {
   if (typeof window === 'undefined' || !window.speechSynthesis) return;
   const vol = getVolume('bots');
   if (vol <= 0) return;
@@ -120,11 +120,37 @@ export function speakBot(text: string, gender: 'm' | 'f') {
   // Si ya hay varias frases esperando, no encolamos más (evita el "coro").
   if (synth.speaking && synth.pending) return;
 
-  synth.speak(buildUtterance(clean, gender, vol));
+  synth.speak(buildUtterance(clean, gender, vol, persona));
 }
 
-/** Arma la locución con la voz y el tono que corresponden al género. */
-function buildUtterance(text: string, gender: 'm' | 'f', vol: number): SpeechSynthesisUtterance {
+/**
+ * Carácter de voz por bot (sobre la base de su género): un desvío de tono y de
+ * velocidad para que cada uno suene como un individuo y no como "genérico
+ * hombre/mujer". Los desvíos son chicos a propósito: dan personalidad sin cruzar
+ * el género (y además hay un tope de seguridad más abajo).
+ */
+const VOICE_PROFILES: Record<string, { dPitch: number; dRate: number }> = {
+  // Hombres
+  Beto: { dPitch: -0.1, dRate: -0.1 }, // resongón: grave, lento, arrastrado
+  Hugo: { dPitch: -0.05, dRate: -0.07 }, // pesimista: apagado, monótono
+  Fito: { dPitch: 0.03, dRate: -0.02 }, // tranqui: medio, relajado
+  // Mujeres
+  Carla: { dPitch: 0.05, dRate: -0.07 }, // amorosa: cálida, suave
+  Elsa: { dPitch: 0.15, dRate: 0.15 }, // dramática: aguda, rápida, exagerada
+  Gaby: { dPitch: 0.1, dRate: 0.1 }, // risueña: saltarina
+  Dani: { dPitch: -0.02, dRate: 0.06 }, // canchera: ágil, con soltura
+  Ana: { dPitch: 0.03, dRate: -0.12 }, // coqueta: lenta, insinuante
+};
+
+const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+
+/** Arma la locución con la voz y el tono del género, más el carácter del bot. */
+function buildUtterance(
+  text: string,
+  gender: 'm' | 'f',
+  vol: number,
+  persona?: string
+): SpeechSynthesisUtterance {
   const picks = pickVoices();
   const voice = gender === 'f' ? picks.f : picks.m;
   const voiceGen = gender === 'f' ? picks.fGender : picks.mGender;
@@ -133,28 +159,48 @@ function buildUtterance(text: string, gender: 'm' | 'f', vol: number): SpeechSyn
   if (voice) u.voice = voice;
   u.lang = voice?.lang ?? 'es-AR';
 
-  // El tono se ajusta según cuánto haya que "corregir" la voz asignada:
+  // Base según cuánto haya que "corregir" la voz asignada:
   //  - si ya es del género correcto, apenas un toque;
   //  - si es neutra/desconocida, un empujón;
   //  - si es del género opuesto (no había otra), se fuerza bien fuerte.
+  let pitch: number;
+  let rate: number;
   if (gender === 'f') {
-    u.pitch = voiceGen === 'f' ? 1.12 : voiceGen === 'm' ? 1.6 : 1.32; // mujer: aguda
-    u.rate = 1.04;
+    pitch = voiceGen === 'f' ? 1.12 : voiceGen === 'm' ? 1.6 : 1.32; // mujer: aguda
+    rate = 1.04;
   } else {
-    u.pitch = voiceGen === 'm' ? 0.9 : voiceGen === 'f' ? 0.5 : 0.62; // hombre: grave
-    u.rate = voiceGen === 'm' ? 0.98 : 0.9; // si es voz de mujer forzada, más lento = más macho
+    pitch = voiceGen === 'm' ? 0.9 : voiceGen === 'f' ? 0.5 : 0.62; // hombre: grave
+    rate = voiceGen === 'm' ? 0.98 : 0.9; // voz de mujer forzada: más lento = más macho
   }
+
+  // Carácter del bot.
+  const prof = persona ? VOICE_PROFILES[persona] : undefined;
+  if (prof) {
+    pitch += prof.dPitch;
+    rate += prof.dRate;
+  }
+
+  // Tope de seguridad: que el carácter no cruce el género.
+  pitch = gender === 'm' ? clamp(pitch, 0.1, 1.0) : clamp(pitch, 1.05, 2);
+  u.pitch = pitch;
+  u.rate = clamp(rate, 0.6, 1.4);
   u.volume = vol > 0 ? vol : 0.9;
   return u;
 }
 
-/** Muestra de voz de mujer y de hombre, para probar cómo suenan. */
+/** Muestra de varias voces (dos hombres y dos mujeres) para oír la variedad. */
 export function testVoices() {
   if (typeof window === 'undefined' || !window.speechSynthesis) return;
   const synth = window.speechSynthesis;
   synth.cancel();
-  synth.speak(buildUtterance('Hola, soy Carla. ¿Jugamos unas bazas?', 'f', getVolume('bots')));
-  synth.speak(buildUtterance('Y yo soy Beto. A ver quién gana.', 'm', getVolume('bots')));
+  const vol = getVolume('bots');
+  const demo: [string, 'm' | 'f', string][] = [
+    ['Uf, otra vez a jugar…', 'm', 'Beto'],
+    ['Esto va a salir mal, ya lo sé.', 'm', 'Hugo'],
+    ['¡Ay, qué nervios, no puedo!', 'f', 'Elsa'],
+    ['Hola, guapo… ¿jugamos?', 'f', 'Ana'],
+  ];
+  for (const [t, g, p] of demo) synth.speak(buildUtterance(t, g, vol, p));
 }
 
 /** Algunos navegadores cargan las voces async; forzamos el primer inventario. */

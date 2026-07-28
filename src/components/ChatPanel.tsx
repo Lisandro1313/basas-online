@@ -66,7 +66,7 @@ export function ChatPanel({ state, youId, session, act }: Props) {
       });
       if (deBot) {
         const p = state.players.find((x) => x.id === deBot.playerId);
-        if (p?.voice) speakBot(deBot.text ?? '', p.voice);
+        if (p?.voice) speakBot(deBot.text ?? '', p.voice, p.name);
       }
     }
     seenSeq.current = lastSeq;

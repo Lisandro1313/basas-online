@@ -1,10 +1,2 @@
-# Claves y secretos: nunca se suben en el bundle del deploy.
-# Las credenciales van por Environment Variables, no por archivo.
-*firebase-adminsdk*.json
-serviceAccountKey.json
-.env
-.env.local
-.env*.local
-
-node_modules
-.next
+*.mp3
+*.m4a

@@ -3,6 +3,7 @@
 import { use, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { SoundMenu } from '@/components/SoundMenu';
+import { TableTheme } from '@/components/TableTheme';
 import { ChatPanel } from '@/components/ChatPanel';
 import { GameOver } from '@/components/GameOver';
 import { GameTable } from '@/components/GameTable';
@@ -130,6 +131,7 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
               reconectando…
             </span>
           )}
+          <TableTheme />
           <SoundMenu />
         </span>
       </div>

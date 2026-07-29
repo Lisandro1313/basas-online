@@ -1,13 +1,30 @@
 @import 'tailwindcss';
 
+/* Tema de mesa (paño, riel y fondo). Se cambia con [data-table] en <html>.
+   Por defecto: verde clásico. */
 :root {
-  --felt: #0f5132;
-  --felt-dark: #0a3a24;
+  --rail: linear-gradient(160deg, #4a3728 0%, #2b1f16 45%, #17100b 100%);
+  --felt: radial-gradient(ellipse at 50% 42%, #1c7d54 0%, #146041 52%, #0c4229 100%);
+  --page-bg: radial-gradient(ellipse at 50% 30%, #14241d 0%, #0b1310 60%, #060a09 100%);
+}
+
+/* Rústica: paño burdeos/vino y riel de madera cálida (mesa antigua). */
+[data-table='rustica'] {
+  --rail: linear-gradient(160deg, #6b4a30 0%, #3f2a1c 45%, #21140c 100%);
+  --felt: radial-gradient(ellipse at 50% 42%, #9a4444 0%, #6f2c30 52%, #431a1e 100%);
+  --page-bg: radial-gradient(ellipse at 50% 30%, #241517 0%, #140b0c 60%, #0a0606 100%);
+}
+
+/* Moderna: paño azul y riel de acero/negro. */
+[data-table='moderna'] {
+  --rail: linear-gradient(160deg, #3a4048 0%, #23272d 45%, #111417 100%);
+  --felt: radial-gradient(ellipse at 50% 42%, #2b6fa0 0%, #17466b 52%, #0b2842 100%);
+  --page-bg: radial-gradient(ellipse at 50% 30%, #101823 0%, #080d14 60%, #04070a 100%);
 }
 
 /* Mesa: riel grueso oscuro por fuera, paño con degradado radial por dentro. */
 .table-rail {
-  background: linear-gradient(160deg, #4a3728 0%, #2b1f16 45%, #17100b 100%);
+  background: var(--rail);
   box-shadow:
     0 18px 50px rgba(0, 0, 0, 0.65),
     inset 0 2px 3px rgba(255, 255, 255, 0.12),
@@ -15,15 +32,15 @@
 }
 
 .table-felt {
-  background: radial-gradient(ellipse at 50% 42%, #1c7d54 0%, #146041 52%, #0c4229 100%);
+  background: var(--felt);
   box-shadow:
     inset 0 0 70px rgba(0, 0, 0, 0.5),
     inset 0 3px 10px rgba(0, 0, 0, 0.45);
 }
 
 body {
-  /* Fondo oscuro: el verde queda solo dentro de la mesa, así el paño resalta. */
-  background: radial-gradient(ellipse at 50% 30%, #14241d 0%, #0b1310 60%, #060a09 100%);
+  /* Fondo oscuro: el paño resalta dentro de la mesa. */
+  background: var(--page-bg);
   background-attachment: fixed;
   min-height: 100dvh;
   color: #f8fafc;

@@ -25,12 +25,48 @@ let wet: GainNode | null = null;
 let musicGain: GainNode | null = null;
 let musicTimer: ReturnType<typeof setInterval> | null = null;
 
-// Música de fondo: archivo propio. Se sirve desde una URL externa (release de
-// GitHub) para no inflar el repo. Configurable por env; si falla, cae a la
-// música sintetizada de más abajo.
-const MUSIC_URL =
-  process.env.NEXT_PUBLIC_MUSIC_URL ||
-  'https://github.com/Lisandro1313/basas-online/releases/download/music-v1/theme.m4a';
+// Música de fondo: archivos propios servidos desde el release de GitHub (para
+// no inflar el repo). Varios temas elegibles; si el archivo falla, cae a la
+// música sintetizada de más abajo. El tema 1 es el original.
+const MUSIC_BASE = 'https://github.com/Lisandro1313/basas-online/releases/download/music-v1';
+const MUSIC_TRACKS = [
+  `${MUSIC_BASE}/theme.m4a`, // 1 (el de siempre)
+  `${MUSIC_BASE}/soundtrack2.m4a`, // 2
+  `${MUSIC_BASE}/soundtrack3.m4a`, // 3
+  `${MUSIC_BASE}/soundtrack4.m4a`, // 4
+];
+const TRACK_KEY = 'basas:musictrack';
+
+export function musicTrackCount(): number {
+  return MUSIC_TRACKS.length;
+}
+
+export function getMusicTrack(): number {
+  try {
+    const n = Number(localStorage.getItem(TRACK_KEY));
+    return n >= 1 && n <= MUSIC_TRACKS.length ? n : 1;
+  } catch {
+    return 1;
+  }
+}
+
+/** Cambia el tema de fondo. Si la música está sonando, la reemplaza en caliente. */
+export function setMusicTrack(n: number) {
+  const idx = Math.min(MUSIC_TRACKS.length, Math.max(1, Math.floor(n)));
+  try {
+    localStorage.setItem(TRACK_KEY, String(idx));
+  } catch {
+    /* sin storage: vale solo esta sesión */
+  }
+  const sonaba = musicEl && !musicEl.paused;
+  if (musicEl) {
+    const el = musicEl;
+    musicEl = null; // que startMusic cree uno nuevo con la URL del tema elegido
+    el.pause();
+  }
+  if (sonaba && getVolume('music') > 0) startMusic();
+}
+
 let musicEl: HTMLAudioElement | null = null;
 let musicFade: ReturnType<typeof setInterval> | null = null;
 
@@ -592,7 +628,7 @@ export function startMusic() {
   if (musicTimer || (musicEl && !musicEl.paused)) return; // ya suena algo
 
   if (!musicEl) {
-    const el = new Audio(MUSIC_URL);
+    const el = new Audio(MUSIC_TRACKS[getMusicTrack() - 1] ?? MUSIC_TRACKS[0]);
     el.loop = true;
     el.preload = 'auto';
     el.volume = 0;

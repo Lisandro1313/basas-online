@@ -1,7 +1,16 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { getVolume, setVolume, unlockAudio, startMusic, type SoundKind } from '@/lib/client/audio';
+import {
+  getVolume,
+  setVolume,
+  unlockAudio,
+  startMusic,
+  getMusicTrack,
+  setMusicTrack,
+  musicTrackCount,
+  type SoundKind,
+} from '@/lib/client/audio';
 
 /**
  * Un solo control de sonido: el botón 🔊 despliega 4 volúmenes independientes
@@ -25,6 +34,7 @@ export function SoundMenu() {
     sfx: 0.9,
   });
   const [ready, setReady] = useState(false);
+  const [track, setTrack] = useState(1);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -34,6 +44,7 @@ export function SoundMenu() {
       bots: getVolume('bots'),
       sfx: getVolume('sfx'),
     });
+    setTrack(getMusicTrack());
     setReady(true);
   }, []);
 
@@ -105,6 +116,30 @@ export function SoundMenu() {
                   onChange={(e) => change(kind, Number(e.target.value) / 100)}
                   className="w-full accent-amber-400"
                 />
+                {kind === 'music' && (
+                  <span className="mt-1.5 flex items-center gap-1.5">
+                    <span className="text-[11px] text-white/50">Tema</span>
+                    {Array.from({ length: musicTrackCount() }, (_, i) => i + 1).map((n) => (
+                      <button
+                        key={n}
+                        onClick={() => {
+                          unlockAudio();
+                          setMusicTrack(n);
+                          setTrack(n);
+                          // Si estaba en silencio, al elegir tema lo prendemos suave.
+                          if (getVolume('music') <= 0) change('music', 0.4);
+                        }}
+                        className={`h-6 w-6 rounded-md text-xs font-bold transition ${
+                          track === n
+                            ? 'bg-amber-400 text-slate-900'
+                            : 'bg-white/10 text-white/70 hover:bg-white/20'
+                        }`}
+                      >
+                        {n}
+                      </button>
+                    ))}
+                  </span>
+                )}
               </label>
             ))}
           </div>

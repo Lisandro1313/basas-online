@@ -28,3 +28,6 @@ serviceAccountKey.json
 
 # Música propia (se sirve desde un release de GitHub, no del repo)
 *.m4a
+
+# Soundtracks (se sirven desde el release de GitHub)
+*.mp3

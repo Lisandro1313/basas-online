@@ -131,15 +131,25 @@ export function useRoom(code: string, session: Session | null): RoomHook {
       const delay =
         fails > 0 ? Math.min(15000, 1000 * 2 ** (fails - 1)) : live ? 20000 : 3000;
       timer = setTimeout(async () => {
-        await refresh();
+        // Con la pestaña oculta no consultamos: una ventana olvidada no gasta
+        // cuota. El listener en tiempo real igual capta cambios si vuelve.
+        if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+          await refresh();
+        }
         if (!stop) schedule();
       }, delay);
     };
 
     schedule();
+    // Al volver a la pestaña, nos ponemos al día enseguida.
+    const onVis = () => {
+      if (document.visibilityState === 'visible') void refresh();
+    };
+    document.addEventListener('visibilitychange', onVis);
     return () => {
       stop = true;
       clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onVis);
     };
   }, [refresh, live]);
 

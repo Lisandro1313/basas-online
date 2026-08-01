@@ -83,11 +83,22 @@ export default function SalasPage() {
     }
   }, []);
 
-  // Refresco periódico suave: solo la lista de salas (no el historial).
+  // Refresco periódico suave: solo la lista de salas (no el historial). Y NUNCA
+  // consulta si la pestaña está oculta (así una ventana olvidada no gasta cuota).
   useEffect(() => {
     void load(true); // al entrar, salas + historial
-    const id = setInterval(() => void load(false), 20000);
-    return () => clearInterval(id);
+    const id = setInterval(() => {
+      if (document.visibilityState === 'visible') void load(false);
+    }, 20000);
+    // Al volver a la pestaña, refrescamos de una.
+    const onVis = () => {
+      if (document.visibilityState === 'visible') void load(false);
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', onVis);
+    };
   }, [load]);
 
   const enter = (code: string) => {

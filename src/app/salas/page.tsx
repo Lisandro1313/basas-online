@@ -66,26 +66,27 @@ export default function SalasPage() {
 
   useEffect(() => setName(lastName()), []);
 
-  const load = useCallback(async () => {
+  // `withGames` solo al entrar o al tocar "Actualizar": el historial casi no
+  // cambia, así que no lo pedimos en cada refresco (ahorra muchas lecturas).
+  const load = useCallback(async (withGames = false) => {
     try {
-      const [rRes, gRes] = await Promise.all([
-        fetch('/api/rooms/list', { cache: 'no-store' }),
-        fetch('/api/games', { cache: 'no-store' }),
-      ]);
+      const reqs: Promise<Response>[] = [fetch('/api/rooms/list', { cache: 'no-store' })];
+      if (withGames) reqs.push(fetch('/api/games', { cache: 'no-store' }));
+      const [rRes, gRes] = await Promise.all(reqs);
       const rData = await rRes.json();
       if (!rRes.ok) throw new Error(rData.error);
       setRooms(rData.rooms);
-      if (gRes.ok) setGames((await gRes.json()).games);
+      if (gRes && gRes.ok) setGames((await gRes.json()).games);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudieron cargar las salas.');
     }
   }, []);
 
-  // Refresco periódico: así ves en vivo quién está jugando.
+  // Refresco periódico suave: solo la lista de salas (no el historial).
   useEffect(() => {
-    void load();
-    const id = setInterval(() => void load(), 5000);
+    void load(true); // al entrar, salas + historial
+    const id = setInterval(() => void load(false), 20000);
     return () => clearInterval(id);
   }, [load]);
 
@@ -102,7 +103,7 @@ export default function SalasPage() {
         </Link>
         <h1 className="text-xl font-black text-amber-300">Salas</h1>
         <button
-          onClick={() => void load()}
+          onClick={() => void load(true)}
           className="rounded-lg bg-white/10 px-3 py-1 text-sm hover:bg-white/20"
         >
           Actualizar

@@ -129,7 +129,7 @@ export function useRoom(code: string, session: Session | null): RoomHook {
     const schedule = () => {
       const fails = failuresRef.current;
       const delay =
-        fails > 0 ? Math.min(15000, 1000 * 2 ** (fails - 1)) : live ? 10000 : 2500;
+        fails > 0 ? Math.min(15000, 1000 * 2 ** (fails - 1)) : live ? 20000 : 3000;
       timer = setTimeout(async () => {
         await refresh();
         if (!stop) schedule();

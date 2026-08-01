@@ -128,7 +128,7 @@ export interface GameSummary {
 const GAME_STALE_MS = 90 * 60 * 1000;
 
 /** Historial de partidas, de la más nueva a la más vieja. */
-export async function listGames(limit = 60): Promise<GameSummary[]> {
+export async function listGames(limit = 30): Promise<GameSummary[]> {
   const db = adminDb();
   const now = Date.now();
 
@@ -188,7 +188,7 @@ export async function listTopScores(
   const db = adminDb();
   // Ordena por puntaje del ganador (índice de campo único, automático). Solo
   // trae partidas terminadas: las que están en juego no tienen winnerPoints.
-  const snap = await db.collection('games').orderBy('winnerPoints', 'desc').limit(300).get();
+  const snap = await db.collection('games').orderBy('winnerPoints', 'desc').limit(120).get();
 
   const corta: TopScore[] = [];
   const larga: TopScore[] = [];
@@ -301,9 +301,15 @@ const ABANDON_PHASES = new Set(['bidding', 'playing']);
  * sin actividad (nadie humano jugando) y salas viejas ociosas. Corre de forma
  * oportunista cuando alguien mira la lista de salas.
  */
+let lastCleanup = 0;
+
 async function cleanupStaleRooms() {
-  const db = adminDb();
   const now = Date.now();
+  // Como mucho una limpieza por minuto: antes corría en cada listado de salas
+  // (cada refresco), gastando lecturas al pedo.
+  if (now - lastCleanup < 60_000) return;
+  lastCleanup = now;
+  const db = adminDb();
   try {
     const snap = await db
       .collection('rooms')
